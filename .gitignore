@@ -1,0 +1,26 @@
+# Build de Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Logs y temporales
+*.log
+*.tmp
+
+# Variables de entorno: se versiona solo el ejemplo
+.env
+.env.*
+!.env.example
