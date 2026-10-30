@@ -20,6 +20,7 @@
         <java.version>25</java.version>
         <springdoc.version>3.2.0</springdoc.version>
         <bouncycastle.version>1.86</bouncycastle.version>
+        <jacoco.version>0.8.16</jacoco.version>
     </properties>
 
     <dependencies>
@@ -113,6 +114,31 @@
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
+            </plugin>
+            <!--
+              Cobertura. El enunciado no exige un porcentaje, asi que no hay umbral
+              que rompa el build: el reporte se publica para poder mirarlo. Ignora el
+              codigo generado por Lombok gracias a lombok.config.
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
