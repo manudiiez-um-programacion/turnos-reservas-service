@@ -209,8 +209,9 @@ que rotarlo.
 
 - **Motor de base de datos**: **PostgreSQL**, el mismo que usa el servicio de catálogo.
   Tiene que ser un gestor servidor: el enunciado rechaza H2, SQLite y cualquier embebida
-  como almacenamiento principal. Ojo: la skill `hexagonal-slicing` todavía propone H2 —
-  sirve solo para tests y hay que ajustarla.
+  como almacenamiento principal. La skill `hexagonal-slicing` propone H2 en su plantilla:
+  el `pom.xml` de este repo la reemplaza por el driver de PostgreSQL y **no usa H2 ni
+  para tests**.
 - **JHipster: no se usa.** Spring Boot a mano siguiendo `hexagonal-slicing`. El modelo de
   usuario sí queda compatible con el contrato de JHipster, como exige el enunciado.
 - **Identidad y autenticación entre servicios**: decidido en el ADR 0002 del repo de
@@ -274,6 +275,18 @@ feature.
 
 ```
 .
+├── pom.xml                   # Spring Boot 4.1.2, Java 25
+├── mvnw / .mvn/              # Maven wrapper (no hace falta Maven instalado)
+├── lombok.config             # Marca el código generado para que JaCoCo no lo cuente
+├── src/main/java/ar/edu/um/turnos/
+│   ├── TurnosReservasApplication.java
+│   ├── config/               # Configuración transversal (SecurityConfig)
+│   └── health/               # Slice de referencia de la estructura hexagonal
+│       ├── domain/           # model, ports/in, ports/out — sin framework
+│       ├── application/      # usecases, service — solo depende de domain
+│       └── infrastructure/   # web (controller, dto, mapper), config/adapter
+├── src/main/resources/application.properties
+├── src/test/java/ar/edu/um/turnos/
 ├── README.md                 # Título + badge de evaluación (bloque autogenerado)
 ├── CLAUDE.md
 ├── docs/catedra/             # Enunciado y referencia de integración (fuentes de verdad)
@@ -283,5 +296,65 @@ feature.
 └── .github/CODEOWNERS        # Owner: @dqmdz-um
 ```
 
-Cuando exista el servicio, agregar acá: comandos de build/test/lint, cómo levantarlo
-local (Docker Compose incluido), paquetes del dominio y variables de entorno requeridas.
+Un paquete por feature, y dentro las tres capas. La regla de dependencias apunta
+hacia adentro: `domain` no depende de nada, `application` solo de `domain`,
+`infrastructure` de ambos y nunca al revés. La `@Entity` de JPA y los DTO web no
+salen de `infrastructure`. El slice `health` es el ejemplo canónico: no tiene
+persistencia a propósito, pero sí puerto de salida con su adaptador.
+
+## 13. Comandos
+
+```bash
+./mvnw verify                 # compila y corre todas las pruebas
+./mvnw -q test                # solo las pruebas
+./mvnw spring-boot:run        # levanta el servicio en el puerto 8080
+./mvnw clean                  # borra target/
+```
+
+Para levantarlo en otro puerto (útil si el 8080 está ocupado):
+
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=8081
+```
+
+Una vez arriba:
+
+| URL | Qué es |
+|---|---|
+| `http://localhost:8080/api/health` | Estado del servicio |
+| `http://localhost:8080/swagger-ui.html` | Swagger UI |
+| `http://localhost:8080/v3/api-docs` | OpenAPI en JSON |
+
+Activar el hook de commits, una vez por clon:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+### Variables de entorno
+
+Todas tienen default de desarrollo, así que el servicio arranca sin configurar nada.
+Los secretos de verdad se externalizan en `.env` (issue #7).
+
+| Variable | Default | Para qué |
+|---|---|---|
+| `DB_URL` | `jdbc:postgresql://localhost:5432/turnos_reservas` | Base propia |
+| `DB_USERNAME` | `turnos` | Usuario de la base |
+| `DB_PASSWORD` | `turnos` | Password de la base |
+
+### Estado provisional de este milestone
+
+Tres cosas están puestas a propósito de forma temporal y hay que sacarlas cuando
+llegue su issue. Están comentadas en el código con el número de issue:
+
+- **Arranca sin PostgreSQL.** `application.properties` desactiva el fail-fast de
+  Hikari y el acceso a los metadatos JDBC de Hibernate, así que el servicio levanta
+  con la base caída. Se saca en #5/#6, cuando existan el Docker Compose y las
+  migraciones. Por eso el dialecto se declara explícito: sin metadatos, Hibernate no
+  puede deducirlo (Hibernate avisa que no haría falta; con esta config, sí).
+- **Seguridad abierta.** `SecurityConfig` hace `permitAll()` para que Swagger sea
+  accesible. Se reemplaza entero en #11. Lo único definitivo ahí es que la API es
+  stateless y sin CSRF.
+- **Sin usuarios.** Se excluye `UserDetailsServiceAutoConfiguration` para que Spring
+  Security no invente un usuario en memoria con password aleatoria en el log. Los
+  usuarios finales llegan en #9/#10.
