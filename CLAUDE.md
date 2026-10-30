@@ -293,6 +293,7 @@ feature.
 ├── .claude/skills/           # git-flujo-integrador, hexagonal-slicing
 ├── .githooks/commit-msg      # Validación de Conventional Commits
 ├── .gitattributes            # LF forzado en los hooks
+├── .github/workflows/        # build.yml: CI en cada PR
 └── .github/CODEOWNERS        # Owner: @dqmdz-um
 ```
 
@@ -330,6 +331,19 @@ Activar el hook de commits, una vez por clon:
 ```bash
 git config core.hooksPath .githooks
 ```
+
+### Integración continua
+
+`.github/workflows/build.yml` corre `./mvnw -B verify` en cada pull request y en los
+pushes a `develop`, `testing` y `main`. Publica en el resumen del job la tabla de
+pruebas y la de cobertura, y guarda los reportes de Surefire y JaCoCo como artefacto.
+
+No usa ningún secreto: las pruebas no hablan con el servicio central ni necesitan
+PostgreSQL. El check es informativo — el ruleset de las ramas protegidas lo administra
+la cátedra y este repo no toca su configuración.
+
+La cobertura no tiene umbral que rompa el build: el enunciado no exige un porcentaje.
+Se mide para poder mirarla, y el código generado por Lombok no cuenta.
 
 ### Variables de entorno
 
