@@ -9,6 +9,103 @@
 Servicio de turnos y reservas del proyecto integrador de Programación 2
 (Universidad de Mendoza).
 
+## Levantar el entorno local
+
+Requiere Docker. No hace falta tener Java ni Maven instalados: la imagen compila
+el servicio adentro.
+
+```bash
+cp .env.example .env     # y completar DB_PASSWORD y POSTGRES_SUPERUSER_PASSWORD
+docker compose up --build
+curl http://localhost:8081/api/health
+# {"nombre":"turnos-reservas-service","version":"0.0.1-SNAPSHOT","estado":"UP",...}
+```
+
+Qué levanta: PostgreSQL 18 y este servicio. El servicio espera a que la base pase
+su healthcheck antes de arrancar, así que un solo comando alcanza y no hay que
+reintentar.
+
+| URL | Qué es |
+|---|---|
+| `http://localhost:8081/api/health` | Estado del servicio |
+| `http://localhost:8081/swagger-ui.html` | Swagger UI |
+| `http://localhost:8081/v3/api-docs` | OpenAPI en JSON |
+
+Ciclo de vida:
+
+```bash
+docker compose up -d          # levantar en segundo plano
+docker compose ps             # ver el estado y los healthchecks
+docker compose logs -f        # seguir los logs
+docker compose down           # parar y borrar los contenedores; LOS DATOS QUEDAN
+docker compose down -v        # parar y borrar tambien el volumen: datos borrados
+```
+
+La diferencia entre las dos últimas importa: los datos viven en un volumen con
+nombre (`turnos-reservas-service-postgres-data`) y sobreviven a `down`. Solo
+`down -v` los borra, y es lo que hay que hacer para que el script de
+inicialización de la base vuelva a correr (el entrypoint de PostgreSQL lo ejecuta
+únicamente cuando el volumen está vacío).
+
+### Correr la aplicación fuera de Docker
+
+Útil para iterar desde el IDE. La base sigue viniendo de Compose:
+
+```bash
+docker compose up -d postgres
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+Hay dos perfiles y la única diferencia real entre ellos es cómo se alcanza la
+base: `local` usa `localhost` y el puerto **publicado** por Compose, y `docker`
+usa el nombre del servicio en la red de Compose y el puerto **interno**. El perfil
+`docker` lo activa `compose.yaml`; no hay que pasarlo a mano.
+
+### Puertos
+
+| Servicio | Puerto | Por qué |
+|---|---|---|
+| App de turnos y reservas | `8081` | El servicio de catálogo usa el 8080. |
+| PostgreSQL de turnos y reservas | `5433` | El PostgreSQL del catálogo usa el 5432. |
+
+Los dos backends tienen que poder correr al mismo tiempo, de ahí los números
+distintos. Si alguno de esos puertos ya está ocupado en la máquina, se cambian con
+`SERVER_PORT` y `DB_PORT` en el `.env` sin tocar ningún archivo versionado (si se
+mueve `DB_PORT`, ajustar también `DB_URL`, que es el que usa el perfil `local`).
+
+### Base de datos: una instancia, dos bases lógicas
+
+La solución completa usa **una sola instancia de PostgreSQL con dos bases
+lógicas**: `catalogo` y `turnos_reservas`. Cada una tiene su propio rol, y ninguno
+de los dos puede conectarse a la base del otro. El enunciado (§3) permite compartir
+la instancia física exactamente bajo esa condición, y así se evita tener dos
+motores corriendo en la máquina de desarrollo para un proyecto de dos servicios.
+
+El aislamiento no es una convención, está impuesto por la base
+(`docker/postgres/init/02-crear-base-turnos.sh`):
+
+- el rol de la aplicación se crea `NOSUPERUSER NOCREATEDB NOCREATEROLE`, así que no
+  puede ver objetos de otras bases ni escalarse creando una base o un rol nuevos;
+- a la base se le hace `REVOKE ALL ... FROM PUBLIC` y se le devuelve `CONNECT` solo
+  al dueño, porque por defecto PostgreSQL deja que cualquier rol se conecte a
+  cualquier base;
+- al esquema `public` se le hace lo mismo y queda a nombre del dueño de la base.
+
+El superusuario de la instancia queda solo como cuenta de administración: la
+aplicación nunca lo usa.
+
+**Este `compose.yaml` levanta su propia instancia**, porque sirve para desarrollar
+el servicio de turnos solo, sin depender de que el otro repo esté clonado. La
+instancia compartida se materializa en un **compose de nivel superior**, que
+orquesta los dos backends juntos y no vive en ninguno de los dos repos de
+servicio. Los scripts de inicialización de los dos repos están escritos para poder
+montarse juntos en ese contenedor compartido: prefijo numérico distinto
+(`01-` el catálogo, `02-` este) para que el orden sea determinístico, y variables
+prefijadas (`CATALOG_DB_*` y `TURNOS_DB_*`) para que convivan en el mismo entorno.
+
+Redis y Kafka **no** se levantan localmente: son instancias administradas por la
+cátedra y se consumen por red (§3 de la referencia de integración).
+
 ## Análisis de calidad: SonarCloud
 
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=manudiiez-um-programacion_turnos-reservas-service&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=manudiiez-um-programacion_turnos-reservas-service)
