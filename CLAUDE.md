@@ -20,11 +20,19 @@ Arriba de todo está el **servicio central de la cátedra**: fuente autoritativa
 catálogo y de las reservas, al que se accede por REST, Redis y Kafka. No se corre
 local: es una instancia administrada por la cátedra.
 
-**Estado actual: sin código del servicio.** El repo tiene documentación de la cátedra,
-convenciones de trabajo y skills. El stack está definido como objetivo (Java + Spring
-Boot, arquitectura hexagonal por slices verticales) pero todavía no hay `pom.xml` ni
-código. Antes de asumir estructura de paquetes, build o dependencias, confirmar con el
-usuario o seguir la skill `hexagonal-slicing`.
+**Estado actual: el esqueleto del servicio está en pie, el dominio todavía no.** Hay
+proyecto Spring Boot (Java 25), arquitectura hexagonal por slices verticales con el
+slice `health` como ejemplo canónico, PostgreSQL con migraciones versionadas, entorno
+local completo en Docker Compose, CI en cada pull request y análisis estático en
+SonarCloud. La estructura concreta está en el §12 y los comandos en el §13: son la
+referencia, no hay que adivinarlos ni confirmarlos.
+
+Lo que **no** existe todavía es la funcionalidad: no hay usuarios finales, ni cliente
+REST de la cátedra, ni consumo de Kafka, ni disponibilidad, ni holds, ni procesos de
+reserva. Las tablas de dominio tampoco: cada una llega con el issue que la necesita.
+Para agregar un slice nuevo, seguir la skill `hexagonal-slicing` y respetar la regla de
+dependencias del §12. Las decisiones que siguen abiertas están en el §9 y ésas sí hay
+que confirmarlas antes de asumirlas.
 
 ## 2. Fuentes de verdad
 
