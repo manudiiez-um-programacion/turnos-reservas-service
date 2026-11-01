@@ -15,7 +15,7 @@ Requiere Docker. No hace falta tener Java ni Maven instalados: la imagen compila
 el servicio adentro.
 
 ```bash
-cp .env.example .env     # y completar DB_PASSWORD y POSTGRES_SUPERUSER_PASSWORD
+cp .env.example .env     # y completar los valores (ver "Configuración y secretos")
 docker compose up --build
 curl http://localhost:8081/api/health
 # {"nombre":"turnos-reservas-service","version":"0.0.1-SNAPSHOT","estado":"UP",...}
@@ -160,6 +160,78 @@ se le consulta antes de cada operación. Dentro de una reserva sí puede quedar
 información descriptiva histórica —el nombre del profesional al momento de
 reservar—, pero como dato congelado de esa reserva, y nunca como catálogo para
 buscar ni para validar una reserva nueva.
+
+## Configuración y secretos
+
+Nada sensible vive en el repositorio. Todo lo que es un secreto o depende del
+entorno se externaliza en variables de entorno, que se leen de un `.env`
+**ignorado por git**; lo único versionado es `.env.example`, con la lista completa
+de claves y valores de ejemplo inofensivos.
+
+```bash
+cp .env.example .env
+```
+
+Hay dos clases de variables y se comportan distinto:
+
+- **Con default de desarrollo** (puerto, nombre de la base, usuario, Swagger): se
+  pueden dejar como vienen y el servicio arranca.
+- **Obligatorias y sin default** (la integración con la cátedra y los dos secretos
+  de JWT): si falta una, **el servicio no arranca** y el error dice exactamente
+  cuál falta y de dónde se saca. Es deliberado: un default inventado para una URL
+  o un JWT no sirve para nada y solo esconde el problema hasta la primera llamada
+  real.
+
+### De dónde sale cada valor
+
+| Variable | Origen |
+|---|---|
+| `CATEDRA_API_BASE_URL` | La informa la cátedra por otro canal (§3 de la referencia). |
+| `CATEDRA_JWT` | Lo emite el registro de la cuenta técnica y lo renueva `POST /api/authenticate` (§5.1 y §5.2). Vigencia: **un año**. |
+| `CATEDRA_GROUP_ID`, `CATEDRA_KAFKA_*`, `CATEDRA_REDIS_*` | Vienen en el objeto `integration` que devuelve `GET /api/student/integration` (§5.3). |
+| `JWT_USER_SECRET`, `JWT_INTERNAL_SECRET` | Se generan acá, uno por vez: `openssl rand -base64 48`. |
+
+Los nombres de los topics y el consumer group dependen del `groupId`, así que se
+configuran enteros y **nunca se arman concatenando en el código**: si la cátedra
+reprovisiona la cuenta, cambia el `.env` y no hay que recompilar.
+
+**Redis es opcional para este servicio** y se puede dejar vacío. El snapshot del
+catálogo que la cátedra publica por Redis lo consume el *otro* backend; acá las
+ocupaciones y los holds se piden por REST, y §14.1 es explícito en que los holds no
+tienen acceso contractual por Redis. Queda configurable por si se usa el namespace
+privado `alumnos:{groupId}:*` para estado auxiliar propio (§14.6).
+
+### Las tres credenciales no se mezclan
+
+| Credencial | Para qué | Dirección |
+|---|---|---|
+| **JWT de usuario** (`JWT_USER_SECRET`) | El token del usuario final. Lo emite este servicio, que es dueño de los usuarios, y el de catálogo lo valida. | Hacia nuestros clientes |
+| **JWT técnico interno** (`JWT_INTERNAL_SECRET`) | Las llamadas de este servicio al de catálogo, con autoridad `SERVICE_TURNOS`. No representa a ningún usuario. | Entre nuestros backends |
+| **JWT técnico de la cátedra** (`CATEDRA_JWT`) | Las llamadas al servicio central. | Solo hacia afuera |
+
+Los dos secretos propios tienen que ser **distintos**, y hay una validación que
+rechaza el arranque si coinciden. No es prolijidad: es lo que hace *criptográfica*
+la separación entre "un usuario pidiendo algo" y "un backend pidiendo algo". Con un
+secreto compartido, un token de usuario robado se podría presentar como si fuera el
+del servicio. Copiar el mismo valor en las dos variables es el error fácil de
+cometer al armar el `.env`, y deja todo funcionando en apariencia.
+
+El JWT de la cátedra **nunca** sale hacia nuestros clientes: no se envía a la app
+KMP ni al servicio de catálogo, y no se acepta como credencial de entrada.
+
+### Qué pasa si se filtra un secreto
+
+Borrarlo en un commit posterior **no alcanza**: queda en el historial. Hay que
+rotarlo. Para el JWT de la cátedra eso significa crear otra cuenta técnica,
+reconfigurar los dos backends con los nuevos valores e informar a la cátedra (§5.4
+de la referencia); la revocación anticipada de JWT no está en el alcance.
+
+Para que un secreto no termine en un log por accidente, las clases de configuración
+(`CatedraProperties`, `JwtProperties`) sobreescriben `toString()` y enmascaran el
+JWT técnico y la password de Redis. Los `record` imprimen todos sus componentes por
+defecto, así que basta un log de debug o el volcado de un error de binding para
+filtrarlos. Se conserva el prefijo y el largo, que es lo que uno necesita para
+distinguir "cargué la credencial equivocada" de "no cargué ninguna".
 
 ## Análisis de calidad: SonarCloud
 
