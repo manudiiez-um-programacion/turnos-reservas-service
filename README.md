@@ -106,6 +106,61 @@ prefijadas (`CATALOG_DB_*` y `TURNOS_DB_*`) para que convivan en el mismo entorn
 Redis y Kafka **no** se levantan localmente: son instancias administradas por la
 cátedra y se consumen por red (§3 de la referencia de integración).
 
+### Migraciones del esquema
+
+El esquema lo crean **migraciones versionadas con Flyway**, nunca Hibernate:
+`spring.jpa.hibernate.ddl-auto` se queda en `validate`, que solo verifica que el
+mapeo de las entidades coincida con las tablas existentes. Los scripts viven en
+`src/main/resources/db/migration` y se aplican solos al arrancar la aplicación;
+Flyway anota lo aplicado en `flyway_schema_history`, así que un reinicio no
+vuelve a ejecutar nada.
+
+Se eligió Flyway y no Liquibase por coherencia con el servicio de catálogo, que ya
+lo había elegido: los dos backends comparten la instancia de PostgreSQL y conviene
+que las migraciones se lean y se operen igual en los dos repos. Además el SQL plano
+deja el esquema a la vista en el diff.
+
+Reglas de trabajo con las migraciones:
+
+- **una migración mergeada no se edita nunca.** Flyway guarda el checksum de cada
+  script y `validate-on-migrate` falla si cambia; para corregir algo se agrega una
+  migración nueva;
+- el nombre sigue el formato `V<n>__<descripcion>.sql`, con doble guion bajo;
+- `clean` está deshabilitado en todos los perfiles: borraría el esquema completo;
+- `baseline-on-migrate` queda en `false`, porque la base arranca vacía: si
+  aparecieran tablas sin historial de Flyway es un error y conviene que falle;
+- en el perfil `test` las migraciones están **apagadas**, porque `./mvnw verify` no
+  necesita una base levantada. Verificarlas contra un PostgreSQL real es parte de la
+  suite con Testcontainers.
+
+La aplicación corre las migraciones con su propio rol común, no con el superusuario
+de la instancia: el rol es dueño de su base y de su esquema `public`, que es
+exactamente lo que necesita para crear sus objetos y nada más.
+
+### Propiedad de los datos
+
+Cada servicio es propietario exclusivo de sus datos (§3 del enunciado). La base
+`turnos_reservas` guarda:
+
+| Dato | Para qué |
+|---|---|
+| Usuarios finales | Este servicio es dueño del registro, del hasheo de contraseñas y de la emisión del JWT de usuario. |
+| Procesos de reserva | El estado local de cada proceso y su máquina de estados, identificado por `reservationProcessId`. |
+| Reservas | El resultado confirmado, con el `reservationId` de la cátedra y el usuario final dueño. |
+| Eventos procesados | El `eventId` de los eventos de Kafka ya procesados, para que un duplicado no cambie el resultado. |
+
+Cada tabla llega con el issue que la necesita, para que el historial muestre el
+esquema creciendo junto a la funcionalidad. La primera migración crea solo lo
+transversal: la función `set_updated_at()`, el trigger de auditoría que van a
+compartir todas las tablas propias.
+
+Lo que esta base **no** guarda nunca es una **copia del catálogo vigente**
+(categorías, profesionales, horarios semanales): eso es del servicio de catálogo y
+se le consulta antes de cada operación. Dentro de una reserva sí puede quedar
+información descriptiva histórica —el nombre del profesional al momento de
+reservar—, pero como dato congelado de esa reserva, y nunca como catálogo para
+buscar ni para validar una reserva nueva.
+
 ## Análisis de calidad: SonarCloud
 
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=manudiiez-um-programacion_turnos-reservas-service&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=manudiiez-um-programacion_turnos-reservas-service)

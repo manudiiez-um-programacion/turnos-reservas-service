@@ -63,6 +63,34 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Migraciones versionadas, como exige el enunciado (§3): el esquema lo
+             crean los scripts de db/migration y nunca Hibernate, que se queda
+             en ddl-auto=validate.
+
+             Flyway y no Liquibase por coherencia con el servicio de catalogo,
+             que ya lo eligio (turnos-catalogo-sync#5): los dos backends
+             comparten la instancia de PostgreSQL y conviene que las
+             migraciones se lean y se operen igual en los dos repos. El SQL
+             plano tambien deja el esquema a la vista en el diff, que es lo que
+             la catedra evalua.
+
+             Va el STARTER y no flyway-core suelto: en Spring Boot 4 las
+             autoconfiguraciones viven en modulos propios, asi que flyway-core
+             pone la libreria en el classpath pero NO la integra, y las
+             migraciones no corren. Con ddl-auto=validate y sin entidades
+             todavia, la aplicacion arrancaria igual y sin avisar.
+
+             El soporte de cada motor va en su propio artefacto desde Flyway
+             10, de ahi el segundo. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
         <!-- Seguridad: JWT de usuario propio y JWT tecnico interno (#10, #11, #12). -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
