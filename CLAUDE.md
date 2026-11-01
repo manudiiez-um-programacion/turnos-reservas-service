@@ -338,12 +338,27 @@ git config core.hooksPath .githooks
 pushes a `develop`, `testing` y `main`. Publica en el resumen del job la tabla de
 pruebas y la de cobertura, y guarda los reportes de Surefire y JaCoCo como artefacto.
 
-No usa ningún secreto: las pruebas no hablan con el servicio central ni necesitan
-PostgreSQL. El check es informativo — el ruleset de las ramas protegidas lo administra
-la cátedra y este repo no toca su configuración.
+Después de las pruebas corre el análisis estático en **SonarCloud** (#51), lo dispara
+GitHub Actions (el *automatic analysis* está desactivado del lado del servidor para
+que no choque). Lee la cobertura del `jacoco.xml` que dejó `verify`; la ruta, el
+project key y la organización están en las propiedades `sonar.*` del `pom.xml`, y el
+`sonar-maven-plugin` está en `pluginManagement` para que no corra en los `verify`
+locales.
+
+El único secreto es `SONAR_TOKEN`, un secret de repositorio que provee el dueño del
+repo: **si falta, el análisis se omite con un aviso y el build sigue en verde**, así
+que el proyecto se clona y compila sin cuenta de SonarCloud. Las pruebas en sí no
+hablan con el servicio central ni necesitan PostgreSQL. El check es informativo — el
+ruleset de las ramas protegidas lo administra la cátedra y este repo no toca su
+configuración.
 
 La cobertura no tiene umbral que rompa el build: el enunciado no exige un porcentaje.
-Se mide para poder mirarla, y el código generado por Lombok no cuenta.
+Se mide para poder mirarla, y el código generado por Lombok no cuenta. El quality gate
+es el "Sonar way" por defecto y también es informativo: no se usa
+`sonar.qualitygate.wait`. Dos límites conocidos: la cobertura solo se puede *leer* en
+`main` (restricción del plan de la organización, el análisis se procesa igual en toda
+rama), y `fetch-depth: 0` en el checkout no es opcional — sin historial completo Sonar
+no calcula el "new code".
 
 ### Variables de entorno
 
