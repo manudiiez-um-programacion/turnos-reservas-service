@@ -185,7 +185,12 @@ El enunciado evalúa explícitamente estos comportamientos (§8, §11 y §18 de 
   `DelegatingPasswordEncoder`. Nunca en texto plano, ni en logs, ni en respuestas.
 - **Secretos externalizados**: URL de la API, host/puerto/usuario/password de Redis,
   bootstrap servers de Kafka y JWT técnico van en `.env` (ignorado por git); se
-  versiona solo `.env.example`. Jamás en el código ni en el repositorio.
+  versiona solo `.env.example`. Jamás en el código ni en el repositorio. Desde #7 la
+  configuración está tipada y validada en `CatedraProperties` y `JwtProperties`: si
+  falta una propiedad obligatoria el servicio no arranca, y el `toString()` de esas
+  clases enmascara el JWT técnico y la password de Redis para que no terminen en un
+  log. Los dos secretos propios tienen que ser distintos y hay una validación que
+  rechaza el arranque si coinciden.
 - CORS configurado solo para los clientes permitidos.
 
 Si se filtra un secreto: avisar de inmediato. Borrarlo en otro commit no alcanza, hay
@@ -298,7 +303,8 @@ feature.
 ├── lombok.config             # Marca el código generado para que JaCoCo no lo cuente
 ├── src/main/java/ar/edu/um/turnos/
 │   ├── TurnosReservasApplication.java
-│   ├── config/               # Configuración transversal (SecurityConfig)
+│   ├── config/               # Transversal: SecurityConfig + configuración tipada
+│   │                         # (CatedraProperties, JwtProperties)
 │   └── health/               # Slice de referencia de la estructura hexagonal
 │       ├── domain/           # model, ports/in, ports/out — sin framework
 │       ├── application/      # usecases, service — solo depende de domain
@@ -405,10 +411,11 @@ no calcula el "new code".
 
 ### Variables de entorno
 
-Todas tienen default de desarrollo, así que el servicio arranca sin configurar nada.
-Los secretos de verdad se externalizan en `.env` (issue #7).
+Hay **dos clases** y se comportan distinto (#7). La lista completa, con
+comentarios, está en `.env.example`; el detalle de orígenes y de las tres
+credenciales, en el README.
 
-La lista completa, con comentarios, está en `.env.example`. Las que importan:
+Con default de desarrollo — se pueden dejar como vienen:
 
 | Variable | Default | Para qué |
 |---|---|---|
@@ -418,8 +425,43 @@ La lista completa, con comentarios, está en `.env.example`. Las que importan:
 | `DB_PASSWORD` | `turnos` | Password del rol |
 | `DB_PORT` | `5433` | Puerto con el que Compose publica PostgreSQL |
 | `DB_URL` | `jdbc:postgresql://localhost:5433/turnos_reservas` | Solo para correr la app fuera de Docker |
-| `POSTGRES_SUPERUSER_PASSWORD` | — | Admin de la instancia; la app nunca la usa. Obligatoria en Compose |
 | `SPRINGDOC_ENABLED` | `true` | Swagger UI y `/v3/api-docs` |
+| `JWT_ISSUER` | `turnos-reservas-service` | Claim `iss` de los tokens propios |
+| `JWT_USER_EXPIRATION` | `PT1H` | Vigencia del JWT de usuario |
+| `JWT_INTERNAL_EXPIRATION` | `PT2M` | Vigencia del JWT interno |
+
+**Obligatorias y sin default: si falta una, el servicio no arranca** y el error
+nombra la variable y de dónde se saca:
+
+| Variable | Para qué |
+|---|---|
+| `CATEDRA_API_BASE_URL` | URL base del servicio central |
+| `CATEDRA_JWT` | JWT técnico de la cátedra. Vigencia un año |
+| `CATEDRA_GROUP_ID` | Identificador del proyecto; es el sufijo de los topics |
+| `CATEDRA_KAFKA_BOOTSTRAP_SERVERS` | Brokers de Kafka |
+| `CATEDRA_KAFKA_CONSUMER_GROUP_ID` | Consumer group de la cuenta técnica |
+| `CATEDRA_KAFKA_APPOINTMENT_ACTIONS_TOPIC` | Topic de entrada (cátedra → alumno) |
+| `CATEDRA_KAFKA_APPOINTMENT_PHONE_TOPIC` | Topic de salida (alumno → cátedra) |
+| `JWT_USER_SECRET` | Secreto HS256 del JWT de usuario. ≥32 caracteres |
+| `JWT_INTERNAL_SECRET` | Secreto HS256 del JWT interno. ≥32 caracteres y **distinto** del anterior |
+| `POSTGRES_SUPERUSER_PASSWORD` | Admin de la instancia; la app nunca la usa. La exige Compose, no la app |
+
+Las `CATEDRA_REDIS_*` son **opcionales**: este servicio no usa Redis (las
+ocupaciones y los holds van por REST, y §14.1 niega acceso contractual a los holds
+por Redis). Quedan configurables por el namespace privado de §14.6.
+
+Dos detalles al tocar esto:
+
+- en `application.properties` las obligatorias se escriben `${VARIABLE:}`, con los
+  dos puntos finales. Parecen de más, justamente porque no tienen default, pero son
+  lo que hace funcionar la validación: sin ellos Spring deja el texto
+  `${CATEDRA_JWT}` como valor literal, y ese literal no es blanco, así que
+  `@NotBlank` lo acepta y el servicio arranca creyendo tener una URL cuyo valor es
+  la cadena `${CATEDRA_API_BASE_URL}`;
+- `compose.yaml` pasa las variables de la app **crudas**, sin `:?`. La
+  interpolación de Compose valida el archivo entero, así que un `:?` ahí haría que
+  `docker compose up -d postgres` exigiera la configuración de la aplicación para
+  levantar solo la base. Quien valida es la aplicación, que da mejor diagnóstico.
 
 ### Estado provisional de este milestone
 

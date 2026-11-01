@@ -89,6 +89,44 @@ services:
       DB_NAME: ${DB_NAME:-turnos_reservas}
       DB_USERNAME: ${DB_USERNAME:-turnos}
       DB_PASSWORD: ${DB_PASSWORD}
+
+      # Integracion con la catedra. Los valores viven en .env, que no se
+      # versiona, y se pasan CRUDOS, sin `:?`.
+      #
+      # Tentaba poner `:?` para que compose se quejara antes de construir, pero
+      # su interpolacion valida el archivo ENTERO: con `:?` aca,
+      # `docker compose up -d postgres` --el flujo del README para iterar desde
+      # el IDE-- exigiria la configuracion de la aplicacion para levantar solo
+      # la base. Ademas duplicaria la validacion en dos capas.
+      #
+      # Quien valida es la aplicacion, que es su dueña y da mejor diagnostico:
+      # dice exactamente que propiedad falta y por que. Si falta algo, el
+      # contenedor arranca y el servicio muere en el acto con ese mensaje.
+      CATEDRA_API_BASE_URL: ${CATEDRA_API_BASE_URL}
+      CATEDRA_JWT: ${CATEDRA_JWT}
+      CATEDRA_GROUP_ID: ${CATEDRA_GROUP_ID}
+      CATEDRA_KAFKA_BOOTSTRAP_SERVERS: ${CATEDRA_KAFKA_BOOTSTRAP_SERVERS}
+      CATEDRA_KAFKA_CONSUMER_GROUP_ID: ${CATEDRA_KAFKA_CONSUMER_GROUP_ID}
+      CATEDRA_KAFKA_APPOINTMENT_ACTIONS_TOPIC: ${CATEDRA_KAFKA_APPOINTMENT_ACTIONS_TOPIC}
+      CATEDRA_KAFKA_APPOINTMENT_PHONE_TOPIC: ${CATEDRA_KAFKA_APPOINTMENT_PHONE_TOPIC}
+
+      # Redis es opcional para este servicio (ver .env.example): si no se usa,
+      # queda vacio y el servicio arranca igual.
+      CATEDRA_REDIS_HOST: ${CATEDRA_REDIS_HOST:-}
+      CATEDRA_REDIS_PORT: ${CATEDRA_REDIS_PORT:-6379}
+      CATEDRA_REDIS_USERNAME: ${CATEDRA_REDIS_USERNAME:-}
+      CATEDRA_REDIS_PASSWORD: ${CATEDRA_REDIS_PASSWORD:-}
+      CATEDRA_REDIS_READ_NAMESPACE: ${CATEDRA_REDIS_READ_NAMESPACE:-}
+      CATEDRA_REDIS_WRITE_NAMESPACE: ${CATEDRA_REDIS_WRITE_NAMESPACE:-}
+
+      # Secretos de los JWT que emite este servicio. Obligatorios y distintos
+      # entre si: la validacion de la aplicacion rechaza el arranque si falta
+      # alguno o si coinciden.
+      JWT_USER_SECRET: ${JWT_USER_SECRET}
+      JWT_INTERNAL_SECRET: ${JWT_INTERNAL_SECRET}
+      JWT_ISSUER: ${JWT_ISSUER:-turnos-reservas-service}
+      JWT_USER_EXPIRATION: ${JWT_USER_EXPIRATION:-PT1H}
+      JWT_INTERNAL_EXPIRATION: ${JWT_INTERNAL_EXPIRATION:-PT2M}
     ports:
       - "${SERVER_PORT:-8081}:8081"
     healthcheck:
