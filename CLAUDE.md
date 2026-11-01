@@ -231,6 +231,16 @@ que rotarlo.
   registran allá: antes de decidir algo que cruce los dos servicios, revisar si ya está
   decidido.
 - **Hasheo de contraseñas**: Argon2id (ver §7).
+- **Herramienta de migraciones**: **Flyway** (#6), por coherencia con el servicio de
+  catálogo, que ya lo había elegido (`turnos-catalogo-sync#5`). Los dos backends
+  comparten la instancia de PostgreSQL y conviene operar las migraciones igual en los
+  dos repos; el SQL plano además deja el esquema a la vista en el diff. Va el
+  `spring-boot-starter-flyway`, **no** `flyway-core` suelto: en Spring Boot 4 las
+  autoconfiguraciones viven en módulos propios, así que `flyway-core` pone la librería
+  en el classpath pero no la integra y las migraciones no corren — con
+  `ddl-auto=validate` y sin entidades, encima, la aplicación arranca sin avisar.
+  Una migración mergeada **no se edita nunca**: Flyway guarda su checksum y
+  `validate-on-migrate` falla. Para corregir algo, migración nueva.
 
 ### Todavía abiertas
 
@@ -239,7 +249,6 @@ No asumir ninguna de estas sin confirmar con el usuario:
 - Contrato concreto que expone el catálogo (endpoints, DTO, errores). Especificado en
   `turnos-catalogo-sync#18` y documentado en su `#20`, pero todavía no implementado:
   leerlo de ahí, no adivinarlo.
-- Herramienta de migraciones (Flyway o Liquibase).
 - Máquina de estados local de los procesos de reserva.
 - Estrategia de deduplicación, timeouts, backoff y límites de reintentos.
 - Parámetros concretos de Argon2id (hay que medirlos, no copiarlos).
@@ -297,7 +306,8 @@ feature.
 ├── src/main/resources/
 │   ├── application.properties          # Común; el default apunta al Postgres de Compose
 │   ├── application-local.properties    # App fuera de Docker
-│   └── application-docker.properties   # App dentro de Compose
+│   ├── application-docker.properties   # App dentro de Compose
+│   └── db/migration/                   # Migraciones Flyway (V1__esquema_base.sql)
 ├── src/test/java/ar/edu/um/turnos/
 ├── src/test/resources/application-test.properties   # Perfil `test`: sin base real
 ├── compose.yaml              # PostgreSQL + el servicio
