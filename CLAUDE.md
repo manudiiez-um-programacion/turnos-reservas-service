@@ -212,6 +212,17 @@ que rotarlo.
   como almacenamiento principal. La skill `hexagonal-slicing` propone H2 en su plantilla:
   el `pom.xml` de este repo la reemplaza por el driver de PostgreSQL y **no usa H2 ni
   para tests**.
+- **Una instancia de PostgreSQL, dos bases lógicas** (#5): `catalogo` y
+  `turnos_reservas`, cada una con su rol y sin permisos cruzados. El enunciado (§3)
+  permite compartir la instancia física justo bajo esa condición, y evita dos motores
+  corriendo para un proyecto de dos servicios. El aislamiento lo impone la base, no
+  una convención: rol `NOSUPERUSER NOCREATEDB NOCREATEROLE`, `REVOKE ALL` a `PUBLIC`
+  sobre la base y sobre el esquema `public`. Ver `docker/postgres/init/`.
+  El `compose.yaml` de cada repo levanta **su propia** instancia, para poder
+  desarrollar un servicio solo; la instancia compartida la materializa un **compose
+  de nivel superior que no vive en ninguno de los dos repos de servicio**. Los
+  scripts de init están escritos para montarse juntos ahí: prefijo numérico distinto
+  (`01-` catálogo, `02-` este) y variables prefijadas (`CATALOG_DB_*`, `TURNOS_DB_*`).
 - **JHipster: no se usa.** Spring Boot a mano siguiendo `hexagonal-slicing`. El modelo de
   usuario sí queda compatible con el contrato de JHipster, como exige el enunciado.
 - **Identidad y autenticación entre servicios**: decidido en el ADR 0002 del repo de
@@ -228,8 +239,6 @@ No asumir ninguna de estas sin confirmar con el usuario:
 - Contrato concreto que expone el catálogo (endpoints, DTO, errores). Especificado en
   `turnos-catalogo-sync#18` y documentado en su `#20`, pero todavía no implementado:
   leerlo de ahí, no adivinarlo.
-- Dónde vive el `docker-compose` que levanta la solución completa, y si se usa una
-  instancia de PostgreSQL con dos bases lógicas o una por servicio.
 - Herramienta de migraciones (Flyway o Liquibase).
 - Máquina de estados local de los procesos de reserva.
 - Estrategia de deduplicación, timeouts, backoff y límites de reintentos.
@@ -285,8 +294,17 @@ feature.
 │       ├── domain/           # model, ports/in, ports/out — sin framework
 │       ├── application/      # usecases, service — solo depende de domain
 │       └── infrastructure/   # web (controller, dto, mapper), config/adapter
-├── src/main/resources/application.properties
+├── src/main/resources/
+│   ├── application.properties          # Común; el default apunta al Postgres de Compose
+│   ├── application-local.properties    # App fuera de Docker
+│   └── application-docker.properties   # App dentro de Compose
 ├── src/test/java/ar/edu/um/turnos/
+├── src/test/resources/application-test.properties   # Perfil `test`: sin base real
+├── compose.yaml              # PostgreSQL + el servicio
+├── Dockerfile                # Multi-stage: JDK para compilar, JRE para correr
+├── .dockerignore
+├── .env.example              # Plantilla; `.env` está ignorado
+├── docker/postgres/init/     # Crea la base lógica y el rol de este servicio
 ├── README.md                 # Título + badge de evaluación (bloque autogenerado)
 ├── CLAUDE.md
 ├── docs/catedra/             # Enunciado y referencia de integración (fuentes de verdad)
@@ -308,23 +326,38 @@ persistencia a propósito, pero sí puerto de salida con su adaptador.
 ```bash
 ./mvnw verify                 # compila y corre todas las pruebas
 ./mvnw -q test                # solo las pruebas
-./mvnw spring-boot:run        # levanta el servicio en el puerto 8080
+./mvnw spring-boot:run        # levanta el servicio en el puerto 8081
 ./mvnw clean                  # borra target/
 ```
 
-Para levantarlo en otro puerto (útil si el 8080 está ocupado):
+El entorno local completo va con Docker Compose:
 
 ```bash
-./mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=8081
+cp .env.example .env          # completar las dos passwords
+docker compose up --build     # PostgreSQL + el servicio
+docker compose down           # parar; los datos quedan en el volumen
+docker compose down -v        # parar y borrar los datos
 ```
+
+Para iterar desde el IDE con la base de Compose:
+
+```bash
+docker compose up -d postgres
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+Puertos: este servicio usa **8081** (app) y **5433** (PostgreSQL), porque el de
+catálogo usa 8080 y 5432 y los dos tienen que poder correr a la vez. Si alguno está
+ocupado se mueve con `SERVER_PORT` / `DB_PORT` en el `.env`, sin tocar nada
+versionado.
 
 Una vez arriba:
 
 | URL | Qué es |
 |---|---|
-| `http://localhost:8080/api/health` | Estado del servicio |
-| `http://localhost:8080/swagger-ui.html` | Swagger UI |
-| `http://localhost:8080/v3/api-docs` | OpenAPI en JSON |
+| `http://localhost:8081/api/health` | Estado del servicio |
+| `http://localhost:8081/swagger-ui.html` | Swagger UI |
+| `http://localhost:8081/v3/api-docs` | OpenAPI en JSON |
 
 Activar el hook de commits, una vez por clon:
 
@@ -365,25 +398,37 @@ no calcula el "new code".
 Todas tienen default de desarrollo, así que el servicio arranca sin configurar nada.
 Los secretos de verdad se externalizan en `.env` (issue #7).
 
+La lista completa, con comentarios, está en `.env.example`. Las que importan:
+
 | Variable | Default | Para qué |
 |---|---|---|
-| `DB_URL` | `jdbc:postgresql://localhost:5432/turnos_reservas` | Base propia |
-| `DB_USERNAME` | `turnos` | Usuario de la base |
-| `DB_PASSWORD` | `turnos` | Password de la base |
+| `SERVER_PORT` | `8081` | Puerto de la app |
+| `DB_NAME` | `turnos_reservas` | Base lógica propia |
+| `DB_USERNAME` | `turnos` | Rol de la aplicación |
+| `DB_PASSWORD` | `turnos` | Password del rol |
+| `DB_PORT` | `5433` | Puerto con el que Compose publica PostgreSQL |
+| `DB_URL` | `jdbc:postgresql://localhost:5433/turnos_reservas` | Solo para correr la app fuera de Docker |
+| `POSTGRES_SUPERUSER_PASSWORD` | — | Admin de la instancia; la app nunca la usa. Obligatoria en Compose |
+| `SPRINGDOC_ENABLED` | `true` | Swagger UI y `/v3/api-docs` |
 
 ### Estado provisional de este milestone
 
-Tres cosas están puestas a propósito de forma temporal y hay que sacarlas cuando
+Dos cosas están puestas a propósito de forma temporal y hay que sacarlas cuando
 llegue su issue. Están comentadas en el código con el número de issue:
 
-- **Arranca sin PostgreSQL.** `application.properties` desactiva el fail-fast de
-  Hikari y el acceso a los metadatos JDBC de Hibernate, así que el servicio levanta
-  con la base caída. Se saca en #5/#6, cuando existan el Docker Compose y las
-  migraciones. Por eso el dialecto se declara explícito: sin metadatos, Hibernate no
-  puede deducirlo (Hibernate avisa que no haría falta; con esta config, sí).
 - **Seguridad abierta.** `SecurityConfig` hace `permitAll()` para que Swagger sea
   accesible. Se reemplaza entero en #11. Lo único definitivo ahí es que la API es
   stateless y sin CSRF.
 - **Sin usuarios.** Se excluye `UserDetailsServiceAutoConfiguration` para que Spring
   Security no invente un usuario en memoria con password aleatoria en el log. Los
   usuarios finales llegan en #9/#10.
+
+La aplicación ya **no** tolera arrancar sin PostgreSQL: desde #5 falla rápido, que es
+lo que uno quiere de un servicio que necesita su base. La tolerancia quedó acotada al
+perfil `test` (`src/test/resources/application-test.properties`), para que
+`./mvnw verify` no necesite una base levantada. Ese archivo es un **perfil** y no un
+`src/test/resources/application.properties` a propósito: un archivo con ese nombre no
+se suma al de `main`, lo tapa, y el contexto falla por
+`Could not resolve placeholder 'spring.application.name'`. Lo activan las clases de
+prueba con `@ActiveProfiles("test")`. Las pruebas contra una base real llegan con
+Testcontainers en #41.
