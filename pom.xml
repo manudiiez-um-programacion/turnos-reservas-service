@@ -21,6 +21,24 @@
         <springdoc.version>3.2.0</springdoc.version>
         <bouncycastle.version>1.86</bouncycastle.version>
         <jacoco.version>0.8.16</jacoco.version>
+        <sonar.maven.plugin.version>5.8.0.7211</sonar.maven.plugin.version>
+
+        <!--
+          Analisis estatico en SonarCloud (#51). Lo dispara GitHub Actions, no el
+          ciclo de vida de Maven: el workflow corre `mvnw sonar:sonar` como paso
+          aparte, despues de `verify`. El automatic analysis de SonarCloud queda
+          desactivado del lado del servidor para que no choque con el de CI.
+
+          La cobertura no la calcula Sonar: la lee del XML que JaCoCo ya genera en
+          la fase verify. Si en el log del analisis no aparece `Importing 1
+          report(s)`, la ruta esta mal y la cobertura sale 0%.
+        -->
+        <sonar.organization>manudiiez-um-programacion</sonar.organization>
+        <sonar.projectKey>manudiiez-um-programacion_turnos-reservas-service</sonar.projectKey>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <sonar.coverage.jacoco.xmlReportPaths>
+            ${project.build.directory}/site/jacoco/jacoco.xml
+        </sonar.coverage.jacoco.xmlReportPaths>
     </properties>
 
     <dependencies>
@@ -102,6 +120,21 @@
     </dependencies>
 
     <build>
+        <pluginManagement>
+            <!--
+              Solo fija la version. El plugin no se declara en <plugins> a proposito:
+              no tiene que correr en cada `mvnw verify` local (necesita token y red),
+              sino unicamente cuando el workflow lo invoca explicitamente.
+            -->
+            <plugins>
+                <plugin>
+                    <groupId>org.sonarsource.scanner.maven</groupId>
+                    <artifactId>sonar-maven-plugin</artifactId>
+                    <version>${sonar.maven.plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
