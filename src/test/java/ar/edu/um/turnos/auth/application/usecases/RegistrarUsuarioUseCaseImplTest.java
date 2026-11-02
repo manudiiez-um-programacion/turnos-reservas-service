@@ -90,6 +90,12 @@ class RegistrarUsuarioUseCaseImplTest {
     }
 
     @Test
+    void rechazaUnaSolicitudNulaConUnaExcepcionClara() {
+        assertThatThrownBy(() -> useCase.registrar(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
     void rechazaUnEmailYaUsado() {
         when(usuarioRepositoryPort.existeConLogin(anyString())).thenReturn(false);
         when(usuarioRepositoryPort.existeConEmail("ana.gomez@ejemplo.com")).thenReturn(true);

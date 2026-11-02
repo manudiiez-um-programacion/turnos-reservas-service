@@ -1,6 +1,7 @@
 package ar.edu.um.turnos.auth.application.usecases;
 
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -30,6 +31,11 @@ public class RegistrarUsuarioUseCaseImpl implements RegistrarUsuarioUseCase {
 
     @Override
     public Usuario registrar(SolicitudRegistroUsuario solicitud) {
+        // RegistroWebMapper.toSolicitud puede devolver null (null-guarda su
+        // entrada, como todos los mappers del proyecto): este chequeo evita
+        // que ese null llegue sin control al resto del metodo.
+        Objects.requireNonNull(solicitud, "la solicitud de registro no puede ser null");
+
         // login y email se normalizan a minusculas antes de comparar y de
         // guardar (igual que JHipster): asi la unicidad es case-insensitive
         // sin necesitar un indice funcional en la base.
