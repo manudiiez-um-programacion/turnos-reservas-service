@@ -254,6 +254,13 @@ que rotarlo.
   `ddl-auto=validate` y sin entidades, encima, la aplicación arranca sin avisar.
   Una migración mergeada **no se edita nunca**: Flyway guarda su checksum y
   `validate-on-migrate` falla. Para corregir algo, migración nueva.
+- **Parámetros de Argon2id** (#9): salt 16 bytes, hash 32 bytes, paralelismo 1,
+  memoria 19456 KiB (19 MiB) y 2 iteraciones — la recomendación OWASP 2023,
+  **medida** y no copiada a ciegas: en la máquina de desarrollo un `encode()`
+  tarda 20-25 ms en estado estable y el string codificado mide 97 caracteres
+  (105 con el prefijo `{argon2}` del `DelegatingPasswordEncoder`), de ahí que
+  `usuario.password_hash` sea `VARCHAR(120)` y no los 60 fijos de BCrypt. Ver
+  `PasswordEncoderConfig`.
 
 ### Todavía abiertas
 
@@ -264,7 +271,6 @@ No asumir ninguna de estas sin confirmar con el usuario:
   leerlo de ahí, no adivinarlo.
 - Máquina de estados local de los procesos de reserva.
 - Estrategia de deduplicación, timeouts, backoff y límites de reintentos.
-- Parámetros concretos de Argon2id (hay que medirlos, no copiarlos).
 
 ## 10. Cómo se trabaja en este repo
 
