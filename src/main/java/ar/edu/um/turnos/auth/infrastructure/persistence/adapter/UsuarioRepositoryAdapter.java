@@ -1,5 +1,6 @@
 package ar.edu.um.turnos.auth.infrastructure.persistence.adapter;
 
+import java.util.Optional;
 import org.springframework.stereotype.Component;
 
 import ar.edu.um.turnos.auth.domain.model.Usuario;
@@ -23,6 +24,11 @@ public class UsuarioRepositoryAdapter implements UsuarioRepositoryPort {
     @Override
     public boolean existeConEmail(String email) {
         return usuarioJpaRepository.existsByEmail(email);
+    }
+
+    @Override
+    public Optional<Usuario> buscarPorLogin(String login) {
+        return usuarioJpaRepository.findByLogin(login).map(mapper::toDomain);
     }
 
     @Override

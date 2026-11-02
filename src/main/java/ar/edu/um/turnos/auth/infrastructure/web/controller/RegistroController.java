@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import ar.edu.um.turnos.auth.application.service.RegistroService;
+import ar.edu.um.turnos.auth.application.service.AuthService;
 import ar.edu.um.turnos.auth.infrastructure.web.dto.RegistroRequest;
 import ar.edu.um.turnos.auth.infrastructure.web.mapper.RegistroWebMapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,14 +29,14 @@ import lombok.RequiredArgsConstructor;
 @Tag(name = "Auth", description = "Registro y autenticacion de usuarios finales")
 public class RegistroController {
 
-    private final RegistroService registroService;
+    private final AuthService authService;
     private final RegistroWebMapper mapper;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Registrar un usuario final")
     public void registrar(@Valid @RequestBody RegistroRequest request) {
-        registroService.registrar(mapper.toSolicitud(request));
+        authService.registrar(mapper.toSolicitud(request));
     }
 
 }

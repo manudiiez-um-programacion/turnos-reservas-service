@@ -18,4 +18,9 @@ public class PasswordHasherAdapter implements PasswordHasherPort {
         return passwordEncoder.encode(passwordEnTextoPlano);
     }
 
+    @Override
+    public boolean verificar(String passwordEnTextoPlano, String hash) {
+        return passwordEncoder.matches(passwordEnTextoPlano, hash);
+    }
+
 }

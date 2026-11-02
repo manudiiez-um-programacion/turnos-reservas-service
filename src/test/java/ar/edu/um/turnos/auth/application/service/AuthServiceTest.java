@@ -8,16 +8,21 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import ar.edu.um.turnos.auth.domain.model.SolicitudAutenticacion;
 import ar.edu.um.turnos.auth.domain.model.SolicitudRegistroUsuario;
 import ar.edu.um.turnos.auth.domain.model.Usuario;
+import ar.edu.um.turnos.auth.domain.ports.in.AutenticarUsuarioUseCase;
 import ar.edu.um.turnos.auth.domain.ports.in.RegistrarUsuarioUseCase;
 
-/** La fachada no tiene logica propia: solo delega en el caso de uso. */
+/** La fachada no tiene logica propia: solo delega en el caso de uso que corresponda. */
 @ExtendWith(MockitoExtension.class)
-class RegistroServiceTest {
+class AuthServiceTest {
 
     @Mock
     private RegistrarUsuarioUseCase registrarUsuarioUseCase;
+
+    @Mock
+    private AutenticarUsuarioUseCase autenticarUsuarioUseCase;
 
     @Test
     void delegaElRegistroEnElCasoDeUso() {
@@ -25,9 +30,19 @@ class RegistroServiceTest {
         Usuario esperado = Usuario.builder().login("ana.gomez").build();
         when(registrarUsuarioUseCase.registrar(solicitud)).thenReturn(esperado);
 
-        RegistroService service = new RegistroService(registrarUsuarioUseCase);
+        AuthService service = new AuthService(registrarUsuarioUseCase, autenticarUsuarioUseCase);
 
         assertThat(service.registrar(solicitud)).isSameAs(esperado);
+    }
+
+    @Test
+    void delegaLaAutenticacionEnElCasoDeUso() {
+        SolicitudAutenticacion solicitud = SolicitudAutenticacion.builder().login("ana.gomez").password("secreta").build();
+        when(autenticarUsuarioUseCase.autenticar(solicitud)).thenReturn("un-jwt");
+
+        AuthService service = new AuthService(registrarUsuarioUseCase, autenticarUsuarioUseCase);
+
+        assertThat(service.autenticar(solicitud)).isEqualTo("un-jwt");
     }
 
 }
