@@ -20,11 +20,19 @@ Arriba de todo está el **servicio central de la cátedra**: fuente autoritativa
 catálogo y de las reservas, al que se accede por REST, Redis y Kafka. No se corre
 local: es una instancia administrada por la cátedra.
 
-**Estado actual: sin código del servicio.** El repo tiene documentación de la cátedra,
-convenciones de trabajo y skills. El stack está definido como objetivo (Java + Spring
-Boot, arquitectura hexagonal por slices verticales) pero todavía no hay `pom.xml` ni
-código. Antes de asumir estructura de paquetes, build o dependencias, confirmar con el
-usuario o seguir la skill `hexagonal-slicing`.
+**Estado actual: el esqueleto del servicio está en pie, el dominio todavía no.** Hay
+proyecto Spring Boot (Java 25), arquitectura hexagonal por slices verticales con el
+slice `health` como ejemplo canónico, PostgreSQL con migraciones versionadas, entorno
+local completo en Docker Compose, CI en cada pull request y análisis estático en
+SonarCloud. La estructura concreta está en el §12 y los comandos en el §13: son la
+referencia, no hay que adivinarlos ni confirmarlos.
+
+Lo que **no** existe todavía es la funcionalidad: no hay usuarios finales, ni cliente
+REST de la cátedra, ni consumo de Kafka, ni disponibilidad, ni holds, ni procesos de
+reserva. Las tablas de dominio tampoco: cada una llega con el issue que la necesita.
+Para agregar un slice nuevo, seguir la skill `hexagonal-slicing` y respetar la regla de
+dependencias del §12. Las decisiones que siguen abiertas están en el §9 y ésas sí hay
+que confirmarlas antes de asumirlas.
 
 ## 2. Fuentes de verdad
 
@@ -185,7 +193,12 @@ El enunciado evalúa explícitamente estos comportamientos (§8, §11 y §18 de 
   `DelegatingPasswordEncoder`. Nunca en texto plano, ni en logs, ni en respuestas.
 - **Secretos externalizados**: URL de la API, host/puerto/usuario/password de Redis,
   bootstrap servers de Kafka y JWT técnico van en `.env` (ignorado por git); se
-  versiona solo `.env.example`. Jamás en el código ni en el repositorio.
+  versiona solo `.env.example`. Jamás en el código ni en el repositorio. Desde #7 la
+  configuración está tipada y validada en `CatedraProperties` y `JwtProperties`: si
+  falta una propiedad obligatoria el servicio no arranca, y el `toString()` de esas
+  clases enmascara el JWT técnico y la password de Redis para que no terminen en un
+  log. Los dos secretos propios tienen que ser distintos y hay una validación que
+  rechaza el arranque si coinciden.
 - CORS configurado solo para los clientes permitidos.
 
 Si se filtra un secreto: avisar de inmediato. Borrarlo en otro commit no alcanza, hay
@@ -212,6 +225,17 @@ que rotarlo.
   como almacenamiento principal. La skill `hexagonal-slicing` propone H2 en su plantilla:
   el `pom.xml` de este repo la reemplaza por el driver de PostgreSQL y **no usa H2 ni
   para tests**.
+- **Una instancia de PostgreSQL, dos bases lógicas** (#5): `catalogo` y
+  `turnos_reservas`, cada una con su rol y sin permisos cruzados. El enunciado (§3)
+  permite compartir la instancia física justo bajo esa condición, y evita dos motores
+  corriendo para un proyecto de dos servicios. El aislamiento lo impone la base, no
+  una convención: rol `NOSUPERUSER NOCREATEDB NOCREATEROLE`, `REVOKE ALL` a `PUBLIC`
+  sobre la base y sobre el esquema `public`. Ver `docker/postgres/init/`.
+  El `compose.yaml` de cada repo levanta **su propia** instancia, para poder
+  desarrollar un servicio solo; la instancia compartida la materializa un **compose
+  de nivel superior que no vive en ninguno de los dos repos de servicio**. Los
+  scripts de init están escritos para montarse juntos ahí: prefijo numérico distinto
+  (`01-` catálogo, `02-` este) y variables prefijadas (`CATALOG_DB_*`, `TURNOS_DB_*`).
 - **JHipster: no se usa.** Spring Boot a mano siguiendo `hexagonal-slicing`. El modelo de
   usuario sí queda compatible con el contrato de JHipster, como exige el enunciado.
 - **Identidad y autenticación entre servicios**: decidido en el ADR 0002 del repo de
@@ -220,6 +244,16 @@ que rotarlo.
   registran allá: antes de decidir algo que cruce los dos servicios, revisar si ya está
   decidido.
 - **Hasheo de contraseñas**: Argon2id (ver §7).
+- **Herramienta de migraciones**: **Flyway** (#6), por coherencia con el servicio de
+  catálogo, que ya lo había elegido (`turnos-catalogo-sync#5`). Los dos backends
+  comparten la instancia de PostgreSQL y conviene operar las migraciones igual en los
+  dos repos; el SQL plano además deja el esquema a la vista en el diff. Va el
+  `spring-boot-starter-flyway`, **no** `flyway-core` suelto: en Spring Boot 4 las
+  autoconfiguraciones viven en módulos propios, así que `flyway-core` pone la librería
+  en el classpath pero no la integra y las migraciones no corren — con
+  `ddl-auto=validate` y sin entidades, encima, la aplicación arranca sin avisar.
+  Una migración mergeada **no se edita nunca**: Flyway guarda su checksum y
+  `validate-on-migrate` falla. Para corregir algo, migración nueva.
 
 ### Todavía abiertas
 
@@ -228,9 +262,6 @@ No asumir ninguna de estas sin confirmar con el usuario:
 - Contrato concreto que expone el catálogo (endpoints, DTO, errores). Especificado en
   `turnos-catalogo-sync#18` y documentado en su `#20`, pero todavía no implementado:
   leerlo de ahí, no adivinarlo.
-- Dónde vive el `docker-compose` que levanta la solución completa, y si se usa una
-  instancia de PostgreSQL con dos bases lógicas o una por servicio.
-- Herramienta de migraciones (Flyway o Liquibase).
 - Máquina de estados local de los procesos de reserva.
 - Estrategia de deduplicación, timeouts, backoff y límites de reintentos.
 - Parámetros concretos de Argon2id (hay que medirlos, no copiarlos).
@@ -280,13 +311,24 @@ feature.
 ├── lombok.config             # Marca el código generado para que JaCoCo no lo cuente
 ├── src/main/java/ar/edu/um/turnos/
 │   ├── TurnosReservasApplication.java
-│   ├── config/               # Configuración transversal (SecurityConfig)
+│   ├── config/               # Transversal: SecurityConfig + configuración tipada
+│   │                         # (CatedraProperties, JwtProperties)
 │   └── health/               # Slice de referencia de la estructura hexagonal
 │       ├── domain/           # model, ports/in, ports/out — sin framework
 │       ├── application/      # usecases, service — solo depende de domain
 │       └── infrastructure/   # web (controller, dto, mapper), config/adapter
-├── src/main/resources/application.properties
+├── src/main/resources/
+│   ├── application.properties          # Común; el default apunta al Postgres de Compose
+│   ├── application-local.properties    # App fuera de Docker
+│   ├── application-docker.properties   # App dentro de Compose
+│   └── db/migration/                   # Migraciones Flyway (V1__esquema_base.sql)
 ├── src/test/java/ar/edu/um/turnos/
+├── src/test/resources/application-test.properties   # Perfil `test`: sin base real
+├── compose.yaml              # PostgreSQL + el servicio
+├── Dockerfile                # Multi-stage: JDK para compilar, JRE para correr
+├── .dockerignore
+├── .env.example              # Plantilla; `.env` está ignorado
+├── docker/postgres/init/     # Crea la base lógica y el rol de este servicio
 ├── README.md                 # Título + badge de evaluación (bloque autogenerado)
 ├── CLAUDE.md
 ├── docs/catedra/             # Enunciado y referencia de integración (fuentes de verdad)
@@ -308,23 +350,38 @@ persistencia a propósito, pero sí puerto de salida con su adaptador.
 ```bash
 ./mvnw verify                 # compila y corre todas las pruebas
 ./mvnw -q test                # solo las pruebas
-./mvnw spring-boot:run        # levanta el servicio en el puerto 8080
+./mvnw spring-boot:run        # levanta el servicio en el puerto 8081
 ./mvnw clean                  # borra target/
 ```
 
-Para levantarlo en otro puerto (útil si el 8080 está ocupado):
+El entorno local completo va con Docker Compose:
 
 ```bash
-./mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=8081
+cp .env.example .env          # completar las dos passwords
+docker compose up --build     # PostgreSQL + el servicio
+docker compose down           # parar; los datos quedan en el volumen
+docker compose down -v        # parar y borrar los datos
 ```
+
+Para iterar desde el IDE con la base de Compose:
+
+```bash
+docker compose up -d postgres
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+Puertos: este servicio usa **8081** (app) y **5433** (PostgreSQL), porque el de
+catálogo usa 8080 y 5432 y los dos tienen que poder correr a la vez. Si alguno está
+ocupado se mueve con `SERVER_PORT` / `DB_PORT` en el `.env`, sin tocar nada
+versionado.
 
 Una vez arriba:
 
 | URL | Qué es |
 |---|---|
-| `http://localhost:8080/api/health` | Estado del servicio |
-| `http://localhost:8080/swagger-ui.html` | Swagger UI |
-| `http://localhost:8080/v3/api-docs` | OpenAPI en JSON |
+| `http://localhost:8081/api/health` | Estado del servicio |
+| `http://localhost:8081/swagger-ui.html` | Swagger UI |
+| `http://localhost:8081/v3/api-docs` | OpenAPI en JSON |
 
 Activar el hook de commits, una vez por clon:
 
@@ -338,37 +395,100 @@ git config core.hooksPath .githooks
 pushes a `develop`, `testing` y `main`. Publica en el resumen del job la tabla de
 pruebas y la de cobertura, y guarda los reportes de Surefire y JaCoCo como artefacto.
 
-No usa ningún secreto: las pruebas no hablan con el servicio central ni necesitan
-PostgreSQL. El check es informativo — el ruleset de las ramas protegidas lo administra
-la cátedra y este repo no toca su configuración.
+Después de las pruebas corre el análisis estático en **SonarCloud** (#51), lo dispara
+GitHub Actions (el *automatic analysis* está desactivado del lado del servidor para
+que no choque). Lee la cobertura del `jacoco.xml` que dejó `verify`; la ruta, el
+project key y la organización están en las propiedades `sonar.*` del `pom.xml`, y el
+`sonar-maven-plugin` está en `pluginManagement` para que no corra en los `verify`
+locales.
+
+El único secreto es `SONAR_TOKEN`, un secret de repositorio que provee el dueño del
+repo: **si falta, el análisis se omite con un aviso y el build sigue en verde**, así
+que el proyecto se clona y compila sin cuenta de SonarCloud. Las pruebas en sí no
+hablan con el servicio central ni necesitan PostgreSQL. El check es informativo — el
+ruleset de las ramas protegidas lo administra la cátedra y este repo no toca su
+configuración.
 
 La cobertura no tiene umbral que rompa el build: el enunciado no exige un porcentaje.
-Se mide para poder mirarla, y el código generado por Lombok no cuenta.
+Se mide para poder mirarla, y el código generado por Lombok no cuenta. El quality gate
+es el "Sonar way" por defecto y también es informativo: no se usa
+`sonar.qualitygate.wait`. Dos límites conocidos: la cobertura solo se puede *leer* en
+`main` (restricción del plan de la organización, el análisis se procesa igual en toda
+rama), y `fetch-depth: 0` en el checkout no es opcional — sin historial completo Sonar
+no calcula el "new code".
 
 ### Variables de entorno
 
-Todas tienen default de desarrollo, así que el servicio arranca sin configurar nada.
-Los secretos de verdad se externalizan en `.env` (issue #7).
+Hay **dos clases** y se comportan distinto (#7). La lista completa, con
+comentarios, está en `.env.example`; el detalle de orígenes y de las tres
+credenciales, en el README.
+
+Con default de desarrollo — se pueden dejar como vienen:
 
 | Variable | Default | Para qué |
 |---|---|---|
-| `DB_URL` | `jdbc:postgresql://localhost:5432/turnos_reservas` | Base propia |
-| `DB_USERNAME` | `turnos` | Usuario de la base |
-| `DB_PASSWORD` | `turnos` | Password de la base |
+| `SERVER_PORT` | `8081` | Puerto de la app |
+| `DB_NAME` | `turnos_reservas` | Base lógica propia |
+| `DB_USERNAME` | `turnos` | Rol de la aplicación |
+| `DB_PASSWORD` | `turnos` | Password del rol |
+| `DB_PORT` | `5433` | Puerto con el que Compose publica PostgreSQL |
+| `DB_URL` | `jdbc:postgresql://localhost:5433/turnos_reservas` | Solo para correr la app fuera de Docker |
+| `SPRINGDOC_ENABLED` | `true` | Swagger UI y `/v3/api-docs` |
+| `JWT_ISSUER` | `turnos-reservas-service` | Claim `iss` de los tokens propios |
+| `JWT_USER_EXPIRATION` | `PT1H` | Vigencia del JWT de usuario |
+| `JWT_INTERNAL_EXPIRATION` | `PT2M` | Vigencia del JWT interno |
+
+**Obligatorias y sin default: si falta una, el servicio no arranca** y el error
+nombra la variable y de dónde se saca:
+
+| Variable | Para qué |
+|---|---|
+| `CATEDRA_API_BASE_URL` | URL base del servicio central |
+| `CATEDRA_JWT` | JWT técnico de la cátedra. Vigencia un año |
+| `CATEDRA_GROUP_ID` | Identificador del proyecto; es el sufijo de los topics |
+| `CATEDRA_KAFKA_BOOTSTRAP_SERVERS` | Brokers de Kafka |
+| `CATEDRA_KAFKA_CONSUMER_GROUP_ID` | Consumer group de la cuenta técnica |
+| `CATEDRA_KAFKA_APPOINTMENT_ACTIONS_TOPIC` | Topic de entrada (cátedra → alumno) |
+| `CATEDRA_KAFKA_APPOINTMENT_PHONE_TOPIC` | Topic de salida (alumno → cátedra) |
+| `JWT_USER_SECRET` | Secreto HS256 del JWT de usuario. ≥32 caracteres |
+| `JWT_INTERNAL_SECRET` | Secreto HS256 del JWT interno. ≥32 caracteres y **distinto** del anterior |
+| `POSTGRES_SUPERUSER_PASSWORD` | Admin de la instancia; la app nunca la usa. La exige Compose, no la app |
+
+Las `CATEDRA_REDIS_*` son **opcionales**: este servicio no usa Redis (las
+ocupaciones y los holds van por REST, y §14.1 niega acceso contractual a los holds
+por Redis). Quedan configurables por el namespace privado de §14.6.
+
+Dos detalles al tocar esto:
+
+- en `application.properties` las obligatorias se escriben `${VARIABLE:}`, con los
+  dos puntos finales. Parecen de más, justamente porque no tienen default, pero son
+  lo que hace funcionar la validación: sin ellos Spring deja el texto
+  `${CATEDRA_JWT}` como valor literal, y ese literal no es blanco, así que
+  `@NotBlank` lo acepta y el servicio arranca creyendo tener una URL cuyo valor es
+  la cadena `${CATEDRA_API_BASE_URL}`;
+- `compose.yaml` pasa las variables de la app **crudas**, sin `:?`. La
+  interpolación de Compose valida el archivo entero, así que un `:?` ahí haría que
+  `docker compose up -d postgres` exigiera la configuración de la aplicación para
+  levantar solo la base. Quien valida es la aplicación, que da mejor diagnóstico.
 
 ### Estado provisional de este milestone
 
-Tres cosas están puestas a propósito de forma temporal y hay que sacarlas cuando
+Dos cosas están puestas a propósito de forma temporal y hay que sacarlas cuando
 llegue su issue. Están comentadas en el código con el número de issue:
 
-- **Arranca sin PostgreSQL.** `application.properties` desactiva el fail-fast de
-  Hikari y el acceso a los metadatos JDBC de Hibernate, así que el servicio levanta
-  con la base caída. Se saca en #5/#6, cuando existan el Docker Compose y las
-  migraciones. Por eso el dialecto se declara explícito: sin metadatos, Hibernate no
-  puede deducirlo (Hibernate avisa que no haría falta; con esta config, sí).
 - **Seguridad abierta.** `SecurityConfig` hace `permitAll()` para que Swagger sea
   accesible. Se reemplaza entero en #11. Lo único definitivo ahí es que la API es
   stateless y sin CSRF.
 - **Sin usuarios.** Se excluye `UserDetailsServiceAutoConfiguration` para que Spring
   Security no invente un usuario en memoria con password aleatoria en el log. Los
   usuarios finales llegan en #9/#10.
+
+La aplicación ya **no** tolera arrancar sin PostgreSQL: desde #5 falla rápido, que es
+lo que uno quiere de un servicio que necesita su base. La tolerancia quedó acotada al
+perfil `test` (`src/test/resources/application-test.properties`), para que
+`./mvnw verify` no necesite una base levantada. Ese archivo es un **perfil** y no un
+`src/test/resources/application.properties` a propósito: un archivo con ese nombre no
+se suma al de `main`, lo tapa, y el contexto falla por
+`Could not resolve placeholder 'spring.application.name'`. Lo activan las clases de
+prueba con `@ActiveProfiles("test")`. Las pruebas contra una base real llegan con
+Testcontainers en #41.

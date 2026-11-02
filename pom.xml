@@ -21,6 +21,24 @@
         <springdoc.version>3.2.0</springdoc.version>
         <bouncycastle.version>1.86</bouncycastle.version>
         <jacoco.version>0.8.16</jacoco.version>
+        <sonar.maven.plugin.version>5.8.0.7211</sonar.maven.plugin.version>
+
+        <!--
+          Analisis estatico en SonarCloud (#51). Lo dispara GitHub Actions, no el
+          ciclo de vida de Maven: el workflow corre `mvnw sonar:sonar` como paso
+          aparte, despues de `verify`. El automatic analysis de SonarCloud queda
+          desactivado del lado del servidor para que no choque con el de CI.
+
+          La cobertura no la calcula Sonar: la lee del XML que JaCoCo ya genera en
+          la fase verify. Si en el log del analisis no aparece `Importing 1
+          report(s)`, la ruta esta mal y la cobertura sale 0%.
+        -->
+        <sonar.organization>manudiiez-um-programacion</sonar.organization>
+        <sonar.projectKey>manudiiez-um-programacion_turnos-reservas-service</sonar.projectKey>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <sonar.coverage.jacoco.xmlReportPaths>
+            ${project.build.directory}/site/jacoco/jacoco.xml
+        </sonar.coverage.jacoco.xmlReportPaths>
     </properties>
 
     <dependencies>
@@ -43,6 +61,34 @@
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
+        </dependency>
+
+        <!-- Migraciones versionadas, como exige el enunciado (§3): el esquema lo
+             crean los scripts de db/migration y nunca Hibernate, que se queda
+             en ddl-auto=validate.
+
+             Flyway y no Liquibase por coherencia con el servicio de catalogo,
+             que ya lo eligio (turnos-catalogo-sync#5): los dos backends
+             comparten la instancia de PostgreSQL y conviene que las
+             migraciones se lean y se operen igual en los dos repos. El SQL
+             plano tambien deja el esquema a la vista en el diff, que es lo que
+             la catedra evalua.
+
+             Va el STARTER y no flyway-core suelto: en Spring Boot 4 las
+             autoconfiguraciones viven en modulos propios, asi que flyway-core
+             pone la libreria en el classpath pero NO la integra, y las
+             migraciones no corren. Con ddl-auto=validate y sin entidades
+             todavia, la aplicacion arrancaria igual y sin avisar.
+
+             El soporte de cada motor va en su propio artefacto desde Flyway
+             10, de ahi el segundo. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
 
         <!-- Seguridad: JWT de usuario propio y JWT tecnico interno (#10, #11, #12). -->
@@ -102,6 +148,21 @@
     </dependencies>
 
     <build>
+        <pluginManagement>
+            <!--
+              Solo fija la version. El plugin no se declara en <plugins> a proposito:
+              no tiene que correr en cada `mvnw verify` local (necesita token y red),
+              sino unicamente cuando el workflow lo invoca explicitamente.
+            -->
+            <plugins>
+                <plugin>
+                    <groupId>org.sonarsource.scanner.maven</groupId>
+                    <artifactId>sonar-maven-plugin</artifactId>
+                    <version>${sonar.maven.plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
