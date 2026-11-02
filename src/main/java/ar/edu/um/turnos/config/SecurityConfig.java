@@ -26,6 +26,15 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 public class SecurityConfig {
 
+    // java:S4502 avisa que deshabilitar CSRF puede ser inseguro. Aca no lo es y no
+    // se corrige: no hay vector que mitigar. La proteccion CSRF existe porque el
+    // navegador adjunta la cookie de sesion sola; esta API no usa cookies ni
+    // sesiones (politica STATELESS) y se autentica por un token que el cliente
+    // tiene que poner a mano en cada request, asi que un sitio de terceros no
+    // puede fabricar una peticion autenticada. Mantener el filtro, en cambio, si
+    // romperia a los clientes no-navegador (la app KMP). Es la misma decision que
+    // #11 fija como definitiva.
+    @SuppressWarnings("java:S4502")
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
