@@ -186,6 +186,20 @@ El enunciado evalúa explícitamente estos comportamientos (§8, §11 y §18 de 
     header `X-Correlation-Id`.
   - JWT técnico de la cátedra: solo hacia afuera, hacia el servicio central. Nunca se
     acepta como credencial de entrada ni se envía al catálogo ni a KMP.
+- **Claims del JWT de usuario** (#10, contrato con el catálogo — ADR 0002 de
+  `turnos-catalogo-sync#59`): `sub` es el `login` (igual que JHipster, no el
+  `externalPatientId`, que es para la cátedra), `auth` son las autoridades como
+  arreglo (nombre y forma fijados por lo que valida `SecurityConfig` del
+  catálogo con `JwtGrantedAuthoritiesConverter`), más `iss`, `iat` y `exp`
+  (vigencia `JWT_USER_EXPIRATION`). Nunca lleva email, `externalPatientId` ni
+  nada de la cuenta técnica de la cátedra.
+- **Limitación aceptada del secreto compartido** (declarada también en el ADR
+  0002): con HS256 y `JWT_USER_SECRET` compartido, el servicio de catálogo es
+  técnicamente capaz de *falsificar* un token de usuario, no solo de
+  verificarlo. Se acepta porque los dos backends son del mismo proyecto y se
+  despliegan juntos; el camino de mejora es RS256 con la clave privada solo
+  acá y la pública en el `.env` del catálogo, que es un cambio de
+  configuración del decodificador y no del dominio.
 - Autorización por identidad autenticada: **aislamiento estricto entre usuarios**.
   Nunca confiar en un id de usuario que venga del cliente.
 - Contraseñas con **Argon2id** (indicación del profesor, 28-10-2026: BCrypt quedó
@@ -254,6 +268,13 @@ que rotarlo.
   `ddl-auto=validate` y sin entidades, encima, la aplicación arranca sin avisar.
   Una migración mergeada **no se edita nunca**: Flyway guarda su checksum y
   `validate-on-migrate` falla. Para corregir algo, migración nueva.
+- **Parámetros de Argon2id** (#9): salt 16 bytes, hash 32 bytes, paralelismo 1,
+  memoria 19456 KiB (19 MiB) y 2 iteraciones — la recomendación OWASP 2023,
+  **medida** y no copiada a ciegas: en la máquina de desarrollo un `encode()`
+  tarda 20-25 ms en estado estable y el string codificado mide 97 caracteres
+  (105 con el prefijo `{argon2}` del `DelegatingPasswordEncoder`), de ahí que
+  `usuario.password_hash` sea `VARCHAR(120)` y no los 60 fijos de BCrypt. Ver
+  `PasswordEncoderConfig`.
 
 ### Todavía abiertas
 
@@ -264,7 +285,6 @@ No asumir ninguna de estas sin confirmar con el usuario:
   leerlo de ahí, no adivinarlo.
 - Máquina de estados local de los procesos de reserva.
 - Estrategia de deduplicación, timeouts, backoff y límites de reintentos.
-- Parámetros concretos de Argon2id (hay que medirlos, no copiarlos).
 
 ## 10. Cómo se trabaja en este repo
 
