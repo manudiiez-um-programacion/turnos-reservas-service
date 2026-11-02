@@ -20,6 +20,7 @@
         <java.version>25</java.version>
         <springdoc.version>3.2.0</springdoc.version>
         <bouncycastle.version>1.86</bouncycastle.version>
+        <jjwt.version>0.13.0</jjwt.version>
         <jacoco.version>0.8.16</jacoco.version>
         <sonar.maven.plugin.version>5.8.0.7211</sonar.maven.plugin.version>
 
@@ -105,6 +106,35 @@
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcprov-jdk18on</artifactId>
             <version>${bouncycastle.version}</version>
+        </dependency>
+        <!--
+          jjwt para FIRMAR el JWT de usuario (#10): es la misma libreria que usa
+          JHipster en su TokenProvider generado, asi que el token que emitimos
+          queda compatible con lo que espera el repo de catalogo (ADR 0002 del
+          repo turnos-catalogo-sync) sin adivinar el formato. jjwt-jackson
+          serializa los claims con Jackson 2.x, que ya esta en el classpath por
+          springdoc.
+
+          No se usa spring-security-oauth2-jose/resource-server: ese starter es
+          para VALIDAR tokens como resource server (eso llega en #11, para
+          proteger los endpoints propios), y acá solo hace falta emitir uno.
+        -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- Kafka: topic de acciones de la catedra y topic de telefono (#18, #19). -->

@@ -186,6 +186,20 @@ El enunciado evalúa explícitamente estos comportamientos (§8, §11 y §18 de 
     header `X-Correlation-Id`.
   - JWT técnico de la cátedra: solo hacia afuera, hacia el servicio central. Nunca se
     acepta como credencial de entrada ni se envía al catálogo ni a KMP.
+- **Claims del JWT de usuario** (#10, contrato con el catálogo — ADR 0002 de
+  `turnos-catalogo-sync#59`): `sub` es el `login` (igual que JHipster, no el
+  `externalPatientId`, que es para la cátedra), `auth` son las autoridades como
+  arreglo (nombre y forma fijados por lo que valida `SecurityConfig` del
+  catálogo con `JwtGrantedAuthoritiesConverter`), más `iss`, `iat` y `exp`
+  (vigencia `JWT_USER_EXPIRATION`). Nunca lleva email, `externalPatientId` ni
+  nada de la cuenta técnica de la cátedra.
+- **Limitación aceptada del secreto compartido** (declarada también en el ADR
+  0002): con HS256 y `JWT_USER_SECRET` compartido, el servicio de catálogo es
+  técnicamente capaz de *falsificar* un token de usuario, no solo de
+  verificarlo. Se acepta porque los dos backends son del mismo proyecto y se
+  despliegan juntos; el camino de mejora es RS256 con la clave privada solo
+  acá y la pública en el `.env` del catálogo, que es un cambio de
+  configuración del decodificador y no del dominio.
 - Autorización por identidad autenticada: **aislamiento estricto entre usuarios**.
   Nunca confiar en un id de usuario que venga del cliente.
 - Contraseñas con **Argon2id** (indicación del profesor, 28-10-2026: BCrypt quedó

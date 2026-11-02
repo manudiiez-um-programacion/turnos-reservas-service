@@ -17,10 +17,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import ar.edu.um.turnos.auth.application.exception.UsuarioDuplicadoException;
-import ar.edu.um.turnos.auth.application.service.RegistroService;
+import ar.edu.um.turnos.auth.application.service.AuthService;
 import ar.edu.um.turnos.auth.domain.model.SolicitudRegistroUsuario;
 import ar.edu.um.turnos.auth.domain.model.Usuario;
-import ar.edu.um.turnos.auth.infrastructure.web.advice.RegistroExceptionHandler;
+import ar.edu.um.turnos.auth.infrastructure.web.advice.AuthExceptionHandler;
 import ar.edu.um.turnos.auth.infrastructure.web.mapper.RegistroWebMapper;
 
 /**
@@ -31,14 +31,14 @@ import ar.edu.um.turnos.auth.infrastructure.web.mapper.RegistroWebMapper;
  */
 @WebMvcTest(controllers = RegistroController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@Import({RegistroWebMapper.class, RegistroExceptionHandler.class})
+@Import({RegistroWebMapper.class, AuthExceptionHandler.class})
 class RegistroControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
     @MockitoBean
-    private RegistroService registroService;
+    private AuthService authService;
 
     private static final String REQUEST_VALIDO = """
             {
@@ -53,7 +53,7 @@ class RegistroControllerTest {
 
     @Test
     void registraYDevuelve201SinCuerpo() throws Exception {
-        when(registroService.registrar(any())).thenReturn(Usuario.builder().build());
+        when(authService.registrar(any())).thenReturn(Usuario.builder().build());
 
         mockMvc.perform(post("/api/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -61,7 +61,7 @@ class RegistroControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$").doesNotExist());
 
-        verify(registroService).registrar(any(SolicitudRegistroUsuario.class));
+        verify(authService).registrar(any(SolicitudRegistroUsuario.class));
     }
 
     @Test
@@ -100,7 +100,7 @@ class RegistroControllerTest {
 
     @Test
     void devuelveProblemJsonConCodeCuandoElLoginYaExiste() throws Exception {
-        when(registroService.registrar(any()))
+        when(authService.registrar(any()))
                 .thenThrow(new UsuarioDuplicadoException(UsuarioDuplicadoException.Campo.LOGIN, "nueva.paciente"));
 
         mockMvc.perform(post("/api/register")

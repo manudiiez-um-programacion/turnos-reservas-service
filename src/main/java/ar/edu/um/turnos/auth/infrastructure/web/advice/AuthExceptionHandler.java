@@ -5,6 +5,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import ar.edu.um.turnos.auth.application.exception.CredencialesInvalidasException;
 import ar.edu.um.turnos.auth.application.exception.UsuarioDuplicadoException;
 
 /**
@@ -14,7 +15,7 @@ import ar.edu.um.turnos.auth.application.exception.UsuarioDuplicadoException;
  * codigo propio ({@code code}), nunca por el texto de {@code detail}.
  */
 @RestControllerAdvice
-public class RegistroExceptionHandler {
+public class AuthExceptionHandler {
 
     @ExceptionHandler(UsuarioDuplicadoException.class)
     public ProblemDetail manejarUsuarioDuplicado(UsuarioDuplicadoException ex) {
@@ -22,6 +23,14 @@ public class RegistroExceptionHandler {
         problema.setTitle("Usuario duplicado");
         problema.setProperty("code",
                 ex.getCampo() == UsuarioDuplicadoException.Campo.LOGIN ? "LOGIN_DUPLICADO" : "EMAIL_DUPLICADO");
+        return problema;
+    }
+
+    @ExceptionHandler(CredencialesInvalidasException.class)
+    public ProblemDetail manejarCredencialesInvalidas(CredencialesInvalidasException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+        problema.setTitle("Credenciales invalidas");
+        problema.setProperty("code", "CREDENCIALES_INVALIDAS");
         return problema;
     }
 

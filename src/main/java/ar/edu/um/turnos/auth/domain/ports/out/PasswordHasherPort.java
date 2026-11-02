@@ -10,4 +10,6 @@ public interface PasswordHasherPort {
 
     String hashear(String passwordEnTextoPlano);
 
+    boolean verificar(String passwordEnTextoPlano, String hash);
+
 }

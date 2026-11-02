@@ -24,4 +24,13 @@ class PasswordHasherAdapterTest {
         assertThat(adapter.hashear("una-contrasenia")).isEqualTo("{argon2}hash");
     }
 
+    @Test
+    void delegaLaVerificacionEnElPasswordEncoderDeSpringSecurity() {
+        when(passwordEncoder.matches("una-contrasenia", "{argon2}hash")).thenReturn(true);
+
+        PasswordHasherAdapter adapter = new PasswordHasherAdapter(passwordEncoder);
+
+        assertThat(adapter.verificar("una-contrasenia", "{argon2}hash")).isTrue();
+    }
+
 }

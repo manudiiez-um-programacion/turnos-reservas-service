@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,6 +45,24 @@ class UsuarioRepositoryAdapterTest {
         when(usuarioJpaRepository.existsByEmail("ana@ejemplo.com")).thenReturn(false);
 
         assertThat(adapter.existeConEmail("ana@ejemplo.com")).isFalse();
+    }
+
+    @Test
+    void buscaPorLoginYMapeaAEntidadDeDominioCuandoExiste() {
+        UsuarioJpaEntity entidad = UsuarioJpaEntity.builder().id(9L).login("ana.gomez").build();
+        when(usuarioJpaRepository.findByLogin("ana.gomez")).thenReturn(Optional.of(entidad));
+
+        Optional<Usuario> resultado = adapter.buscarPorLogin("ana.gomez");
+
+        assertThat(resultado).isPresent();
+        assertThat(resultado.get().getLogin()).isEqualTo("ana.gomez");
+    }
+
+    @Test
+    void buscaPorLoginYDevuelveVacioCuandoNoExiste() {
+        when(usuarioJpaRepository.findByLogin("no.existe")).thenReturn(Optional.empty());
+
+        assertThat(adapter.buscarPorLogin("no.existe")).isEmpty();
     }
 
     @Test
