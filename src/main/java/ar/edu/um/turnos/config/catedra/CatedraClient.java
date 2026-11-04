@@ -6,7 +6,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Supplier;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
@@ -19,6 +18,7 @@ import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriBuilder;
 
 import ar.edu.um.turnos.config.CatedraProperties;
+import ar.edu.um.turnos.config.ProblemBodyParser;
 import ar.edu.um.turnos.config.catedra.dto.CancelacionReservaResponse;
 import ar.edu.um.turnos.config.catedra.dto.CancelarReservaRequest;
 import ar.edu.um.turnos.config.catedra.dto.ConfirmacionHoldResponse;
@@ -68,14 +68,6 @@ import ar.edu.um.turnos.config.catedra.exception.CatedraServerErrorException;
 public class CatedraClient {
 
     private static final String HEADER_TOTAL_COUNT = "X-Total-Count";
-
-    // Instancia propia y no inyectada: Spring Boot 4 usa Jackson 3
-    // (tools.jackson.*) como ObjectMapper del contexto, y esta clase solo
-    // necesita parsear el {@code code}/{@code detail} de un cuerpo
-    // problem+json chico — lo mismo que ya hace ProblemDetailResponses con el
-    // Jackson 2 que trae jjwt-jackson, sin depender de que haya un bean de
-    // ese tipo.
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final RestClient catedraRestClient;
     private final CatedraProperties catedraProperties;
@@ -226,22 +218,8 @@ public class CatedraClient {
         return traducido;
     }
 
-    /**
-     * Los rechazos 401/403 que produce directamente Spring Security pueden
-     * no traer cuerpo (§13 de la referencia), asi que un cuerpo vacio o no
-     * parseable no es un error de esta clase: simplemente no hay {@code code}
-     * ni {@code detail} para informar.
-     */
     private CuerpoProblema parsearCuerpo(RestClientResponseException ex) {
-        String cuerpo = ex.getResponseBodyAsString();
-        if (cuerpo == null || cuerpo.isBlank()) {
-            return null;
-        }
-        try {
-            return OBJECT_MAPPER.readValue(cuerpo, CuerpoProblema.class);
-        } catch (Exception noParseable) {
-            return null;
-        }
+        return ProblemBodyParser.leer(ex.getResponseBodyAsString(), CuerpoProblema.class);
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
