@@ -16,6 +16,7 @@ import ar.edu.um.turnos.config.catalogo.dto.AgendaProfesionalResponse;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoClientErrorException;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoErrorCode;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoHttpException;
+import ar.edu.um.turnos.config.catalogo.exception.CatalogoNoDisponibleException;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoServerErrorException;
 
 /**
@@ -66,6 +67,11 @@ public class CatalogoClient {
      * ({@link CatalogoServerErrorException}) o de red
      * ({@link ResourceAccessException} — timeout o conexion rechazada). Un
      * {@link CatalogoClientErrorException} (4xx) nunca se reintenta.
+     *
+     * <p>Agotados los reintentos, los dos casos se envuelven en
+     * {@link CatalogoNoDisponibleException} (#17): quien llama no necesita
+     * distinguir si el catalogo esta caido o solo lento, solo que no
+     * respondio y no tiene sentido seguir esperando ahora.
      */
     private <T> T conReintentos(Supplier<T> llamada) {
         int intento = 0;
@@ -77,7 +83,8 @@ public class CatalogoClient {
                 if (intento > catalogoProperties.maxRetries()) {
                     log.warn("Agotados los reintentos hacia el catalogo tras {} intento(s): {}",
                             intento, fallo.getMessage());
-                    throw fallo;
+                    throw new CatalogoNoDisponibleException(
+                            "El catalogo no respondio tras agotar los reintentos", fallo);
                 }
                 Duration espera = catalogoProperties.retryBackoff().multipliedBy(1L << (intento - 1));
                 log.warn("Reintentando la agenda vigente del catalogo (intento {}/{}, espera {}): {}",

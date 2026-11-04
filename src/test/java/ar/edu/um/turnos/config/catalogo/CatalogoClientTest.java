@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 import ar.edu.um.turnos.config.CatalogoProperties;
@@ -21,6 +22,7 @@ import ar.edu.um.turnos.config.JwtProperties;
 import ar.edu.um.turnos.config.catalogo.dto.AgendaProfesionalResponse;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoClientErrorException;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoErrorCode;
+import ar.edu.um.turnos.config.catalogo.exception.CatalogoNoDisponibleException;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoServerErrorException;
 
 /**
@@ -204,18 +206,30 @@ class CatalogoClientTest {
     }
 
     @Test
-    @DisplayName("agotados los reintentos, se distingue el 503 (no sincronizado) de un 500")
-    void agotaLosReintentosYDistingueElNoSincronizado() {
+    @DisplayName("agotados los reintentos, se envuelve en CatalogoNoDisponibleException (#17) sin perder el 503 original")
+    void agotaLosReintentosYEnvuelveElNoSincronizado() {
         servidorFalso.createContext("/api/internal/professionals/42/agenda", exchange -> {
             llamadasRecibidas.incrementAndGet();
             responder(exchange, 503, "{}");
         });
 
         assertThatThrownBy(() -> clienteCon(2).obtenerAgendaVigente(42L))
-                .isInstanceOf(CatalogoServerErrorException.class)
-                .satisfies(ex -> assertThat(((CatalogoServerErrorException) ex).esNoSincronizado()).isTrue());
+                .isInstanceOf(CatalogoNoDisponibleException.class)
+                .hasCauseInstanceOf(CatalogoServerErrorException.class)
+                .satisfies(ex -> assertThat(((CatalogoServerErrorException) ex.getCause()).esNoSincronizado()).isTrue());
         // El primer intento + 2 reintentos configurados.
         assertThat(llamadasRecibidas.get()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("una conexion rechazada (catalogo caido) agota los reintentos y tambien se envuelve (#17)")
+    void conexionRechazadaAgotaLosReintentosYSeEnvuelve() {
+        CatalogoClient cliente = clienteCon(2);
+        servidorFalso.stop(0);
+
+        assertThatThrownBy(() -> cliente.obtenerAgendaVigente(42L))
+                .isInstanceOf(CatalogoNoDisponibleException.class)
+                .hasCauseInstanceOf(ResourceAccessException.class);
     }
 
     private static void responder(com.sun.net.httpserver.HttpExchange exchange, int status, String cuerpoJson) throws java.io.IOException {
