@@ -190,6 +190,20 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!--
+          Broker embebido para las pruebas de integracion del consumidor y el
+          productor Kafka (#21): levanta un broker real en el mismo proceso de
+          la JVM, sin Docker, asi que corre en CI igual que cualquier otra
+          prueba de `./mvnw verify`. Alcanza con esto y no con Testcontainers
+          porque no hace falta reproducir la configuracion de un broker real,
+          solo que exista uno de verdad para probar la configuracion de
+          Spring Kafka (#18, #19) contra algo que no sea un mock.
+        -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
