@@ -3,7 +3,6 @@ package ar.edu.um.turnos.config.catalogo;
 import java.time.Duration;
 import java.util.function.Supplier;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -12,6 +11,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 import ar.edu.um.turnos.config.CatalogoProperties;
+import ar.edu.um.turnos.config.ProblemBodyParser;
 import ar.edu.um.turnos.config.catalogo.dto.AgendaProfesionalResponse;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoClientErrorException;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoErrorCode;
@@ -42,11 +42,6 @@ import ar.edu.um.turnos.config.catalogo.exception.CatalogoServerErrorException;
 public class CatalogoClient {
 
     private static final String RUTA_AGENDA = "/api/internal/professionals/{professionalId}/agenda";
-
-    // Instancia propia y no inyectada: misma razon que en CatedraClient, solo
-    // para parsear el code/detail de un problem+json chico sin depender del
-    // ObjectMapper Jackson 3 del contexto.
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final RestClient catalogoRestClient;
     private final CatalogoProperties catalogoProperties;
@@ -116,22 +111,8 @@ public class CatalogoClient {
         return traducido;
     }
 
-    /**
-     * Los rechazos 401/403 que produce directamente Spring Security pueden
-     * no traer cuerpo, igual que en la catedra: un cuerpo vacio o no
-     * parseable no es un error de esta clase, simplemente no hay {@code code}
-     * ni {@code detail} para informar.
-     */
     private CuerpoProblema parsearCuerpo(RestClientResponseException ex) {
-        String cuerpo = ex.getResponseBodyAsString();
-        if (cuerpo == null || cuerpo.isBlank()) {
-            return null;
-        }
-        try {
-            return OBJECT_MAPPER.readValue(cuerpo, CuerpoProblema.class);
-        } catch (Exception noParseable) {
-            return null;
-        }
+        return ProblemBodyParser.leer(ex.getResponseBodyAsString(), CuerpoProblema.class);
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
