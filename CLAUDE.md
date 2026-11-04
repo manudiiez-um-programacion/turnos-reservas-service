@@ -277,14 +277,23 @@ que rotarlo.
   (105 con el prefijo `{argon2}` del `DelegatingPasswordEncoder`), de ahí que
   `usuario.password_hash` sea `VARCHAR(120)` y no los 60 fijos de BCrypt. Ver
   `PasswordEncoderConfig`.
+- **Contrato de la agenda vigente con el catálogo** (#16): `GET
+  /api/internal/professionals/{professionalId}/agenda`, documentado en
+  `docs/contratos/catalogo-turnos.md` de `turnos-catalogo-sync` (issues `#18`/`#20` de
+  ese repo, ya cerrados). Devuelve el profesional vigente, sus horarios semanales
+  habilitados y la `catalogVersion` aplicada en una sola llamada, protegido con el JWT
+  técnico interno de #12. `PROFESSIONAL_NOT_FOUND` (404) y `PROFESSIONAL_DISABLED` (409)
+  son códigos distintos a propósito: el primero es un dato inválido, el segundo impide
+  una operación nueva pero no invalida una reserva histórica. Cliente: `CatalogoClient`
+  (`config/catalogo`), con los mismos timeouts/reintentos que `CatedraClient` para su
+  única operación (un GET idempotente). La URL base tiene default de desarrollo
+  (`http://localhost:8080`, el puerto propio del servicio de catálogo) porque es la
+  dirección de un servicio propio del proyecto, no un dato que entregue un tercero.
 
 ### Todavía abiertas
 
 No asumir ninguna de estas sin confirmar con el usuario:
 
-- Contrato concreto que expone el catálogo (endpoints, DTO, errores). Especificado en
-  `turnos-catalogo-sync#18` y documentado en su `#20`, pero todavía no implementado:
-  leerlo de ahí, no adivinarlo.
 - Máquina de estados local de los procesos de reserva.
 - Estrategia de deduplicación, timeouts, backoff y límites de reintentos.
 
