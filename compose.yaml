@@ -127,6 +127,9 @@ services:
       JWT_ISSUER: ${JWT_ISSUER:-turnos-reservas-service}
       JWT_USER_EXPIRATION: ${JWT_USER_EXPIRATION:-PT1H}
       JWT_INTERNAL_EXPIRATION: ${JWT_INTERNAL_EXPIRATION:-PT2M}
+
+      # CORS (#11): vacio por defecto, ningun cross-origin permitido.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
     ports:
       - "${SERVER_PORT:-8081}:8081"
     healthcheck:
