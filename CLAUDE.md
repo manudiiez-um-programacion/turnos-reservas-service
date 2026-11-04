@@ -175,8 +175,10 @@ El enunciado evalúa explícitamente estos comportamientos (§8, §11 y §18 de 
   de la emisión del JWT de usuario; el de catálogo no tiene usuarios ni login, solo
   valida el token. Así el login y la consulta de reservas propias siguen funcionando
   con el catálogo caído.
-- Todo endpoint que no sea explícitamente público exige JWT válido: firma, vigencia y
-  permisos. Solo registro y login son públicos.
+- Todo endpoint de negocio que no sea explícitamente público exige JWT válido: firma,
+  vigencia y permisos. Solo registro y login son públicos. `/api/health` y Swagger
+  UI/OpenAPI quedan públicos aparte, pero como infraestructura y no como negocio: el
+  healthcheck de `compose.yaml` los consulta sin credenciales (#11).
 - **Tres credenciales distintas, que nunca se confunden:**
   - JWT de usuario: HS256 con `JWT_USER_SECRET`, emitido acá y validado también por el
     catálogo (la app KMP le consulta la búsqueda directo a él).
@@ -491,17 +493,7 @@ Dos detalles al tocar esto:
   `docker compose up -d postgres` exigiera la configuración de la aplicación para
   levantar solo la base. Quien valida es la aplicación, que da mejor diagnóstico.
 
-### Estado provisional de este milestone
-
-Dos cosas están puestas a propósito de forma temporal y hay que sacarlas cuando
-llegue su issue. Están comentadas en el código con el número de issue:
-
-- **Seguridad abierta.** `SecurityConfig` hace `permitAll()` para que Swagger sea
-  accesible. Se reemplaza entero en #11. Lo único definitivo ahí es que la API es
-  stateless y sin CSRF.
-- **Sin usuarios.** Se excluye `UserDetailsServiceAutoConfiguration` para que Spring
-  Security no invente un usuario en memoria con password aleatoria en el log. Los
-  usuarios finales llegan en #9/#10.
+### Arranque y base de datos en los tests
 
 La aplicación ya **no** tolera arrancar sin PostgreSQL: desde #5 falla rápido, que es
 lo que uno quiere de un servicio que necesita su base. La tolerancia quedó acotada al
