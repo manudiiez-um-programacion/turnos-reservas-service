@@ -114,10 +114,6 @@
           repo turnos-catalogo-sync) sin adivinar el formato. jjwt-jackson
           serializa los claims con Jackson 2.x, que ya esta en el classpath por
           springdoc.
-
-          No se usa spring-security-oauth2-jose/resource-server: ese starter es
-          para VALIDAR tokens como resource server (eso llega en #11, para
-          proteger los endpoints propios), y acá solo hace falta emitir uno.
         -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
@@ -135,6 +131,16 @@
             <artifactId>jjwt-jackson</artifactId>
             <version>${jjwt.version}</version>
             <scope>runtime</scope>
+        </dependency>
+        <!--
+          Resource server (#11): VALIDA el JWT de usuario en cada request
+          entrante. Trae spring-security-oauth2-jose (NimbusJwtDecoder) y la
+          integracion con la cadena de filtros de Spring Security. Complementa
+          a jjwt, que solo firma; no lo reemplaza.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
         </dependency>
 
         <!-- Kafka: topic de acciones de la catedra y topic de telefono (#18, #19). -->

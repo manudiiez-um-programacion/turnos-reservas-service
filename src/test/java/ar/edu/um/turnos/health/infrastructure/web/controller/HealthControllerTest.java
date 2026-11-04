@@ -34,9 +34,9 @@ class HealthControllerTest {
     }
 
     @Test
-    void elEndpointEsPublicoEnEsteMilestone() throws Exception {
-        // Documenta el estado provisional de SecurityConfig: en #11 este endpoint
-        // sigue siendo publico, pero el resto de la API deja de serlo.
+    void elEndpointEsPublico() throws Exception {
+        // SecurityConfig (#11) lo trata como infraestructura, no como negocio: el
+        // healthcheck de compose.yaml lo consulta sin credenciales.
         mockMvc.perform(get("/api/health")).andExpect(status().isOk());
     }
 
