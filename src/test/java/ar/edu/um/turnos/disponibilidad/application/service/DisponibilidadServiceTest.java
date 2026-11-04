@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -15,6 +16,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import ar.edu.um.turnos.disponibilidad.domain.model.EstadoOcupacion;
 import ar.edu.um.turnos.disponibilidad.domain.model.Ocupacion;
+import ar.edu.um.turnos.disponibilidad.domain.model.ReglaHorariaSemanal;
+import ar.edu.um.turnos.disponibilidad.domain.model.Slot;
+import ar.edu.um.turnos.disponibilidad.domain.ports.in.GenerarSlotsUseCase;
 import ar.edu.um.turnos.disponibilidad.domain.ports.in.ObtenerOcupacionesUseCase;
 
 @ExtendWith(MockitoExtension.class)
@@ -23,9 +27,14 @@ class DisponibilidadServiceTest {
     @Mock
     private ObtenerOcupacionesUseCase obtenerOcupacionesUseCase;
 
+    @Mock
+    private GenerarSlotsUseCase generarSlotsUseCase;
+
+    private DisponibilidadService service;
+
     @Test
-    void delegaEnElCasoDeUso() {
-        DisponibilidadService service = new DisponibilidadService(obtenerOcupacionesUseCase);
+    void delegaEnElCasoDeUsoDeOcupaciones() {
+        service = new DisponibilidadService(obtenerOcupacionesUseCase, generarSlotsUseCase);
         Long professionalId = 15L;
         LocalDate from = LocalDate.of(2026, 9, 14);
         LocalDate to = LocalDate.of(2026, 9, 14);
@@ -36,6 +45,21 @@ class DisponibilidadServiceTest {
 
         assertThat(resultado).isEqualTo(ocupaciones);
         verify(obtenerOcupacionesUseCase).obtener(professionalId, from, to);
+    }
+
+    @Test
+    void delegaEnElCasoDeUsoDeGenerarSlots() {
+        service = new DisponibilidadService(obtenerOcupacionesUseCase, generarSlotsUseCase);
+        LocalDate fecha = LocalDate.of(2026, 9, 14);
+        List<ReglaHorariaSemanal> reglas = List.of(
+                new ReglaHorariaSemanal(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(10, 0), 30, true));
+        List<Slot> slots = List.of(new Slot(fecha, LocalTime.of(9, 0), LocalTime.of(9, 30)));
+        when(generarSlotsUseCase.generar(reglas, fecha)).thenReturn(slots);
+
+        List<Slot> resultado = service.generarSlots(reglas, fecha);
+
+        assertThat(resultado).isEqualTo(slots);
+        verify(generarSlotsUseCase).generar(reglas, fecha);
     }
 
 }
