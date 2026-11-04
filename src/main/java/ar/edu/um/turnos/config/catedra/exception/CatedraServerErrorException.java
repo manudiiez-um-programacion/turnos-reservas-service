@@ -1,5 +1,6 @@
 package ar.edu.um.turnos.config.catedra.exception;
 
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 
@@ -11,11 +12,16 @@ import org.springframework.http.HttpStatusCode;
  * reintentarla mas tarde tiene sentido. {@link #esServicioNoDisponible()}
  * distingue el caso puntual del 503 para quien necesite tratarlo distinto del
  * 500.
+ *
+ * <p>Un 5xx no garantiza {@code code} (§13.1): a diferencia de
+ * {@link CatedraClientErrorException}, esta clase no lo traduce a
+ * {@link CatedraErrorCode} porque no es un error funcional, es uno de
+ * infraestructura.
  */
 public class CatedraServerErrorException extends CatedraHttpException {
 
-    public CatedraServerErrorException(HttpStatusCode status, String code, String detail) {
-        super(status, code, detail);
+    public CatedraServerErrorException(HttpStatusCode status, String code, String detail, List<CatedraFieldError> fieldErrors) {
+        super(status, code, detail, fieldErrors);
     }
 
     public boolean esServicioNoDisponible() {
