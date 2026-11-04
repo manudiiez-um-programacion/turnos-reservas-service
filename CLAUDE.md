@@ -289,6 +289,25 @@ que rotarlo.
   única operación (un GET idempotente). La URL base tiene default de desarrollo
   (`http://localhost:8080`, el puerto propio del servicio de catálogo) porque es la
   dirección de un servicio propio del proyecto, no un dato que entregue un tercero.
+- **Consumidor de `alumnos.turnos.acciones.{groupId}`** (#18): va el starter
+  `spring-boot-starter-kafka` y no `spring-kafka` suelto — mismo caso que Flyway (ver
+  más arriba): en Spring Boot 4 la autoconfiguración de Kafka vive en el módulo propio
+  `spring-boot-kafka`, que solo entra con el starter. Con `spring-kafka` a secas el
+  proyecto compila y los tests unitarios pasan igual, pero `@KafkaListener` nunca se
+  registra y el consumidor no arranca, sin ningún error visible (se detectó corriendo
+  el contenedor real y notando la ausencia total de logs de Kafka). Decisiones del
+  oyente, en `reservas/infrastructure/messaging`: `AckMode.RECORD` (el offset se
+  confirma recién cuando el método del listener retorna sin lanzar, nunca antes, para
+  cumplir §16 de la referencia incluso antes de que haya persistencia real que
+  "esperar"); reintentos acotados con `FixedBackOff` fijo (3 intentos, 500 ms) ante un
+  evento que no se puede ni leer (JSON inválido o falta un campo común obligatorio),
+  y después se registra el fallo y se avanza — valores fijos en el código y no en
+  variables de entorno porque son ajuste operativo, no un dato que entregue la
+  cátedra. Un `eventType` desconocido o una `schemaVersion` distinta de 1 no son un
+  fallo: se registran y se descartan sin reintentar, porque repetir no los arregla.
+  La lógica propia de cada tipo de evento (`TipoEventoAccion`) queda para los casos de
+  uso que la implementan (#29, #31, #35); este consumidor solo garantiza la
+  recepción, el despacho y el commit del offset.
 
 ### Todavía abiertas
 
