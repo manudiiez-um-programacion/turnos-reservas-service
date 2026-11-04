@@ -30,6 +30,8 @@ import ar.edu.um.turnos.config.catedra.dto.ListarReservasResponse;
 import ar.edu.um.turnos.config.catedra.dto.OcupacionesResponse;
 import ar.edu.um.turnos.config.catedra.dto.ReservaResponse;
 import ar.edu.um.turnos.config.catedra.exception.CatedraClientErrorException;
+import ar.edu.um.turnos.config.catedra.exception.CatedraErrorCode;
+import ar.edu.um.turnos.config.catedra.exception.CatedraFieldError;
 import ar.edu.um.turnos.config.catedra.exception.CatedraHttpException;
 import ar.edu.um.turnos.config.catedra.exception.CatedraServerErrorException;
 
@@ -52,10 +54,13 @@ import ar.edu.um.turnos.config.catedra.exception.CatedraServerErrorException;
  * reconciliacion es responsabilidad de quien use este cliente (#36), no de
  * esta clase.
  *
- * <p>La traduccion de {@code code} a un error de dominio propio (por ejemplo
- * {@code SLOT_ALREADY_HELD}) es alcance de #15: aca solo se distingue, en
- * general, un error funcional (4xx, {@link CatedraClientErrorException}) de
- * uno de infraestructura (5xx, {@link CatedraServerErrorException}).
+ * <p>Un error funcional (4xx) se traduce a {@link CatedraClientErrorException},
+ * que ya trae el {@code code} crudo convertido a un {@link CatedraErrorCode}
+ * propio (#15, §13.1); uno de infraestructura (5xx) se traduce a
+ * {@link CatedraServerErrorException}, que no garantiza {@code code} y por
+ * eso no lo traduce. Un {@code code} que llega pero no esta en
+ * {@link CatedraErrorCode} queda en {@code DESCONOCIDO} y se registra: no
+ * rompe el cliente, pero avisa que la referencia cambio.
  */
 @Slf4j
 @Component
@@ -209,11 +214,16 @@ public class CatedraClient {
         CuerpoProblema cuerpo = parsearCuerpo(ex);
         String code = cuerpo != null ? cuerpo.code() : null;
         String detail = cuerpo != null ? cuerpo.detail() : null;
+        List<CatedraFieldError> fieldErrors = cuerpo != null ? cuerpo.fieldErrorsOVacio() : List.of();
 
         if (ex.getStatusCode().is5xxServerError()) {
-            return new CatedraServerErrorException(ex.getStatusCode(), code, detail);
+            return new CatedraServerErrorException(ex.getStatusCode(), code, detail, fieldErrors);
         }
-        return new CatedraClientErrorException(ex.getStatusCode(), code, detail);
+        CatedraClientErrorException traducido = new CatedraClientErrorException(ex.getStatusCode(), code, detail, fieldErrors);
+        if (code != null && traducido.getErrorCode() == CatedraErrorCode.DESCONOCIDO) {
+            log.warn("La catedra respondio un code sin mapear: '{}' (status {})", code, ex.getStatusCode());
+        }
+        return traducido;
     }
 
     /**
@@ -235,7 +245,11 @@ public class CatedraClient {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record CuerpoProblema(String detail, String code) {
+    private record CuerpoProblema(String detail, String code, List<CatedraFieldError> fieldErrors) {
+
+        List<CatedraFieldError> fieldErrorsOVacio() {
+            return fieldErrors == null ? List.of() : fieldErrors;
+        }
     }
 
 }

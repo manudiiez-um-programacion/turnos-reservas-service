@@ -27,6 +27,7 @@ import ar.edu.um.turnos.config.catedra.dto.ListarReservasFiltro;
 import ar.edu.um.turnos.config.catedra.dto.ListarReservasResponse;
 import ar.edu.um.turnos.config.catedra.dto.OcupacionesResponse;
 import ar.edu.um.turnos.config.catedra.exception.CatedraClientErrorException;
+import ar.edu.um.turnos.config.catedra.exception.CatedraErrorCode;
 import ar.edu.um.turnos.config.catedra.exception.CatedraServerErrorException;
 
 /**
@@ -168,7 +169,7 @@ class CatedraClientTest {
     }
 
     @Test
-    @DisplayName("un 4xx funcional (ej. SLOT_ALREADY_HELD) se traduce y no se reintenta")
+    @DisplayName("un 4xx funcional (ej. SLOT_ALREADY_HELD) se traduce, se mapea a su CatedraErrorCode y no se reintenta")
     void errorFuncionalNoSeReintenta() {
         servidorFalso.createContext("/api/appointment-holds", exchange -> {
             llamadasRecibidas.incrementAndGet();
@@ -184,12 +185,13 @@ class CatedraClientTest {
                     CatedraClientErrorException error = (CatedraClientErrorException) ex;
                     assertThat(error.getCode()).isEqualTo("SLOT_ALREADY_HELD");
                     assertThat(error.getDetail()).isEqualTo("Slot already held");
+                    assertThat(error.getErrorCode()).isEqualTo(CatedraErrorCode.SLOT_ALREADY_HELD);
                 });
         assertThat(llamadasRecibidas.get()).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("un 401 sin cuerpo (rechazo directo de Spring Security) no tiene code ni detail")
+    @DisplayName("un 401 sin cuerpo (rechazo directo de Spring Security) no tiene code ni detail, y su errorCode es DESCONOCIDO")
     void errorSinCuerpo() {
         servidorFalso.createContext("/api/appointments", exchange -> {
             exchange.sendResponseHeaders(401, -1);
@@ -202,6 +204,63 @@ class CatedraClientTest {
                     CatedraClientErrorException error = (CatedraClientErrorException) ex;
                     assertThat(error.getCode()).isNull();
                     assertThat(error.getDetail()).isNull();
+                    assertThat(error.getErrorCode()).isEqualTo(CatedraErrorCode.DESCONOCIDO);
+                });
+    }
+
+    @Test
+    @DisplayName("HOLD_EXPIRED (confirmar hold) se mapea a su CatedraErrorCode")
+    void holdExpiradoSeMapea() {
+        servidorFalso.createContext("/api/appointment-holds/hold-6c0c2f41/confirm", exchange -> responder(exchange, 404, """
+                {"status": 404, "detail": "Hold expired", "code": "HOLD_EXPIRED"}
+                """));
+
+        assertThatThrownBy(() -> clienteCon(0).confirmarHold(
+                        "hold-6c0c2f41", new ConfirmarHoldRequest("user-42", "Juan", "Perez")))
+                .isInstanceOf(CatedraClientErrorException.class)
+                .satisfies(ex -> assertThat(((CatedraClientErrorException) ex).getErrorCode())
+                        .isEqualTo(CatedraErrorCode.HOLD_EXPIRED));
+    }
+
+    @Test
+    @DisplayName("un VALIDATION_ERROR trae los fieldErrors del ejemplo de la referencia (§13)")
+    void validationErrorConFieldErrors() {
+        servidorFalso.createContext("/api/appointment-holds", exchange -> responder(exchange, 400, """
+                {
+                  "status": 400,
+                  "code": "VALIDATION_ERROR",
+                  "fieldErrors": [
+                    {"objectName": "appointmentHoldRequestDTO", "field": "professionalId", "message": "must not be null"}
+                  ]
+                }
+                """));
+
+        assertThatThrownBy(() -> clienteCon(0).crearHold(
+                        new CrearHoldRequest(15L, LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), "user-42")))
+                .isInstanceOf(CatedraClientErrorException.class)
+                .satisfies(ex -> {
+                    CatedraClientErrorException error = (CatedraClientErrorException) ex;
+                    assertThat(error.getErrorCode()).isEqualTo(CatedraErrorCode.VALIDATION_ERROR);
+                    assertThat(error.getFieldErrors()).hasSize(1);
+                    assertThat(error.getFieldErrors().get(0).field()).isEqualTo("professionalId");
+                    assertThat(error.getFieldErrors().get(0).message()).isEqualTo("must not be null");
+                });
+    }
+
+    @Test
+    @DisplayName("un code que la catedra todavia no documenta se mapea a DESCONOCIDO sin romper el cliente")
+    void codeDesconocidoNoRompeElCliente() {
+        servidorFalso.createContext("/api/appointment-holds", exchange -> responder(exchange, 409, """
+                {"status": 409, "detail": "algo nuevo", "code": "CODE_QUE_NO_EXISTE_TODAVIA"}
+                """));
+
+        assertThatThrownBy(() -> clienteCon(0).crearHold(
+                        new CrearHoldRequest(15L, LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), "user-42")))
+                .isInstanceOf(CatedraClientErrorException.class)
+                .satisfies(ex -> {
+                    CatedraClientErrorException error = (CatedraClientErrorException) ex;
+                    assertThat(error.getCode()).isEqualTo("CODE_QUE_NO_EXISTE_TODAVIA");
+                    assertThat(error.getErrorCode()).isEqualTo(CatedraErrorCode.DESCONOCIDO);
                 });
     }
 
