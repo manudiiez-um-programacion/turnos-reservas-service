@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.2</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>ar.edu.um</groupId>
+    <artifactId>turnos-reservas-service</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>turnos-reservas-service</name>
+    <description>Servicio de turnos y reservas del proyecto integrador de Programacion 2</description>
+
+    <properties>
+        <java.version>25</java.version>
+        <springdoc.version>3.2.0</springdoc.version>
+        <bouncycastle.version>1.86</bouncycastle.version>
+        <jjwt.version>0.13.0</jjwt.version>
+        <jacoco.version>0.8.16</jacoco.version>
+        <sonar.maven.plugin.version>5.8.0.7211</sonar.maven.plugin.version>
+
+        <!--
+          Analisis estatico en SonarCloud (#51). Lo dispara GitHub Actions, no el
+          ciclo de vida de Maven: el workflow corre `mvnw sonar:sonar` como paso
+          aparte, despues de `verify`. El automatic analysis de SonarCloud queda
+          desactivado del lado del servidor para que no choque con el de CI.
+
+          La cobertura no la calcula Sonar: la lee del XML que JaCoCo ya genera en
+          la fase verify. Si en el log del analisis no aparece `Importing 1
+          report(s)`, la ruta esta mal y la cobertura sale 0%.
+        -->
+        <sonar.organization>manudiiez-um-programacion</sonar.organization>
+        <sonar.projectKey>manudiiez-um-programacion_turnos-reservas-service</sonar.projectKey>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <sonar.coverage.jacoco.xmlReportPaths>
+            ${project.build.directory}/site/jacoco/jacoco.xml
+        </sonar.coverage.jacoco.xmlReportPaths>
+    </properties>
+
+    <dependencies>
+        <!-- Web y validacion: la API REST que consume la app KMP. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Persistencia del estado propio: procesos de reserva y usuarios finales. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Migraciones versionadas, como exige el enunciado (§3): el esquema lo
+             crean los scripts de db/migration y nunca Hibernate, que se queda
+             en ddl-auto=validate.
+
+             Flyway y no Liquibase por coherencia con el servicio de catalogo,
+             que ya lo eligio (turnos-catalogo-sync#5): los dos backends
+             comparten la instancia de PostgreSQL y conviene que las
+             migraciones se lean y se operen igual en los dos repos. El SQL
+             plano tambien deja el esquema a la vista en el diff, que es lo que
+             la catedra evalua.
+
+             Va el STARTER y no flyway-core suelto: en Spring Boot 4 las
+             autoconfiguraciones viven en modulos propios, asi que flyway-core
+             pone la libreria en el classpath pero NO la integra, y las
+             migraciones no corren. Con ddl-auto=validate y sin entidades
+             todavia, la aplicacion arrancaria igual y sin avisar.
+
+             El soporte de cada motor va en su propio artefacto desde Flyway
+             10, de ahi el segundo. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
+        <!-- Seguridad: JWT de usuario propio y JWT tecnico interno (#10, #11, #12). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <!--
+          Argon2PasswordEncoder de Spring Security delega en Bouncy Castle: sin esta
+          dependencia el encoder falla en tiempo de ejecucion. Decision de #9: Argon2id
+          por indicacion del profesor (BCrypt quedo debilitado).
+        -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>${bouncycastle.version}</version>
+        </dependency>
+        <!--
+          jjwt para FIRMAR el JWT de usuario (#10): es la misma libreria que usa
+          JHipster en su TokenProvider generado, asi que el token que emitimos
+          queda compatible con lo que espera el repo de catalogo (ADR 0002 del
+          repo turnos-catalogo-sync) sin adivinar el formato. jjwt-jackson
+          serializa los claims con Jackson 2.x, que ya esta en el classpath por
+          springdoc.
+        -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <!--
+          Resource server (#11): VALIDA el JWT de usuario en cada request
+          entrante. Trae spring-security-oauth2-jose (NimbusJwtDecoder) y la
+          integracion con la cadena de filtros de Spring Security. Complementa
+          a jjwt, que solo firma; no lo reemplaza.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+
+        <!-- Kafka: topic de acciones de la catedra y topic de telefono (#18, #19). -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <!-- Documentacion de la API: Swagger UI. -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+          Spring Boot 4 saco el soporte de MockMvc de spring-boot-starter-test a un
+          starter propio por tecnologia web. Aporta @AutoConfigureMockMvc y @WebMvcTest.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <!--
+              Solo fija la version. El plugin no se declara en <plugins> a proposito:
+              no tiene que correr en cada `mvnw verify` local (necesita token y red),
+              sino unicamente cuando el workflow lo invoca explicitamente.
+            -->
+            <plugins>
+                <plugin>
+                    <groupId>org.sonarsource.scanner.maven</groupId>
+                    <artifactId>sonar-maven-plugin</artifactId>
+                    <version>${sonar.maven.plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!--
+              Cobertura. El enunciado no exige un porcentaje, asi que no hay umbral
+              que rompa el build: el reporte se publica para poder mirarlo. Ignora el
+              codigo generado por Lombok gracias a lombok.config.
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
