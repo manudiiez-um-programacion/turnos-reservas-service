@@ -2,6 +2,7 @@ package ar.edu.um.turnos.config.catedra;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
@@ -73,6 +74,63 @@ class CatedraClientTest {
                 .build();
 
         return new CatedraClient(restClient, catedraProperties);
+    }
+
+    /** Variante de {@link #clienteCon(int)} con un {@code baseUrl} y un {@code readTimeout} propios, para la prueba de timeout. */
+    private CatedraClient clienteConTimeout(String baseUrl, Duration readTimeout) {
+        CatedraProperties.Api api = new CatedraProperties.Api(baseUrl, Duration.ofSeconds(2), readTimeout, 0, Duration.ofMillis(5));
+        CatedraProperties catedraProperties = new CatedraProperties(
+                "grupo-de-prueba", "jwt-tecnico-de-prueba-no-es-una-credencial", api,
+                new CatedraProperties.Kafka("kafka.invalido:9092", "grupo", "topic.entrada", "topic.salida"), null);
+
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(api.connectTimeout());
+        requestFactory.setReadTimeout(api.readTimeout());
+
+        RestClient restClient = RestClient.builder()
+                .baseUrl(api.baseUrl())
+                .requestFactory(requestFactory)
+                .requestInterceptor(new CatedraAuthInterceptor(catedraProperties))
+                .build();
+
+        return new CatedraClient(restClient, catedraProperties);
+    }
+
+    @Test
+    @DisplayName("un timeout de lectura corta la llamada y no la deja colgada")
+    void cortaPorTimeoutYNoQuedaColgado() {
+        // Un handler que tarda mas que el readTimeout configurado, en vez de un
+        // socket que nunca responde: reusa el mismo servidorFalso que el resto
+        // de la clase, sin un segundo listener en otro puerto.
+        //
+        // obtenerOcupaciones (GET, sin reintentos aca por maxRetries=0) y no
+        // crearHold: con un POST con cuerpo, el mismo SocketTimeoutException
+        // queda envuelto en un RestClientException generico ("no se pudo
+        // convertir la respuesta") en lugar de en ResourceAccessException —
+        // una particularidad de HttpURLConnection/Spring al cortar la lectura
+        // mientras todavia espera el cuerpo de una respuesta a un POST. La
+        // causa real sigue siendo el timeout en los dos casos: se verifica
+        // por la causa de la excepcion y no por su tipo exacto, para no
+        // depender de ese detalle de implementacion.
+        servidorFalso.createContext("/api/appointment-occupancies", exchange -> {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException interrumpido) {
+                Thread.currentThread().interrupt();
+            }
+            responder(exchange, 200, """
+                    {"professionalId": 15, "from": "2026-09-14", "to": "2026-09-14", "occupancies": []}
+                    """);
+        });
+
+        CatedraClient cliente = clienteConTimeout(
+                "http://localhost:" + servidorFalso.getAddress().getPort(), Duration.ofMillis(200));
+
+        // Si el cliente no respetara el readTimeout, esta prueba se colgaria
+        // en vez de fallar: el limite preemptivo es la prueba de que "corta".
+        assertTimeoutPreemptively(Duration.ofSeconds(2), () -> assertThatThrownBy(() -> cliente.obtenerOcupaciones(
+                        15L, LocalDate.of(2026, 9, 14), LocalDate.of(2026, 9, 14)))
+                .hasRootCauseInstanceOf(java.net.SocketTimeoutException.class));
     }
 
     @Test

@@ -143,10 +143,19 @@
             <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
         </dependency>
 
-        <!-- Kafka: topic de acciones de la catedra y topic de telefono (#18, #19). -->
+        <!--
+          Kafka: topic de acciones de la catedra y topic de telefono (#18, #19).
+
+          Va el STARTER y no spring-kafka suelto: en Spring Boot 4 las
+          autoconfiguraciones viven en modulos propios (mismo caso que Flyway,
+          ver el starter de flyway mas arriba), asi que spring-kafka solo
+          pondria la libreria en el classpath sin registrar el procesamiento
+          de @KafkaListener ni los beans por defecto — el consumidor
+          compilaria pero no arrancaria nunca, sin avisar.
+        -->
         <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka</artifactId>
         </dependency>
 
         <!-- Documentacion de la API: Swagger UI. -->
@@ -179,6 +188,20 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+          Broker embebido para las pruebas de integracion del consumidor y el
+          productor Kafka (#21): levanta un broker real en el mismo proceso de
+          la JVM, sin Docker, asi que corre en CI igual que cualquier otra
+          prueba de `./mvnw verify`. Alcanza con esto y no con Testcontainers
+          porque no hace falta reproducir la configuracion de un broker real,
+          solo que exista uno de verdad para probar la configuracion de
+          Spring Kafka (#18, #19) contra algo que no sea un mock.
+        -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
