@@ -45,6 +45,53 @@ class EventoAccionMessagingMapperTest {
         assertThat(evento.getHoldId()).isEqualTo("hold-6c0c2f41");
         assertThat(evento.getOccurredAt()).isEqualTo(Instant.parse("2026-09-10T14:36:01Z"));
         assertThat(evento.getSchemaVersion()).isEqualTo(1);
+        assertThat(evento.getReservationId()).isEqualTo(8251L);
+    }
+
+    @Test
+    @DisplayName("mapea reason y expiresAt de AdditionalInformationRejected")
+    void mapeaReasonYExpiresAtDeInformacionAdicionalRechazada() {
+        String payload = """
+                {
+                  "eventId": "rejection-event-7d11",
+                  "eventType": "AdditionalInformationRejected",
+                  "reservationProcessId": "process-a92b47d0",
+                  "holdId": "hold-6c0c2f41",
+                  "reason": "INVALID_PHONE_NUMBER",
+                  "message": "El telefono ingresado no es valido.",
+                  "expiresAt": "2026-09-10T14:44:50Z",
+                  "occurredAt": "2026-09-10T14:36:01Z",
+                  "schemaVersion": 1
+                }
+                """;
+
+        EventoAccionReserva evento = mapper.aDominio("process-a92b47d0", payload);
+
+        assertThat(evento.getTipo()).isEqualTo(TipoEventoAccion.INFORMACION_ADICIONAL_RECHAZADA);
+        assertThat(evento.getReason()).isEqualTo("INVALID_PHONE_NUMBER");
+        assertThat(evento.getMessage()).isEqualTo("El telefono ingresado no es valido.");
+        assertThat(evento.getExpiresAt()).isEqualTo(Instant.parse("2026-09-10T14:44:50Z"));
+    }
+
+    @Test
+    @DisplayName("mapea reason de AppointmentProcessExpired")
+    void mapeaReasonDeProcesoVencido() {
+        String payload = """
+                {
+                  "eventId": "process-event-7d12",
+                  "eventType": "AppointmentProcessExpired",
+                  "reservationProcessId": "process-a92b47d0",
+                  "holdId": "hold-6c0c2f41",
+                  "reason": "HOLD_EXPIRED",
+                  "occurredAt": "2026-09-10T14:44:52Z",
+                  "schemaVersion": 1
+                }
+                """;
+
+        EventoAccionReserva evento = mapper.aDominio("process-a92b47d0", payload);
+
+        assertThat(evento.getTipo()).isEqualTo(TipoEventoAccion.PROCESO_VENCIDO);
+        assertThat(evento.getReason()).isEqualTo("HOLD_EXPIRED");
     }
 
     @Test

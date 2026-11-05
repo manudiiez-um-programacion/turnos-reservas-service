@@ -9,9 +9,9 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * (§15.4-§15.10 de la referencia): los campos comunes a las seis variantes,
  * mas los propios de {@code AdditionalInformationRequested} ({@code
  * requiredField}, {@code message}, {@code expiresAt}, §15.4) que necesita
- * #29. El resto de los campos especificos de las otras variantes ({@code
- * reason}, {@code status}, etc.) siguen sin modelarse aca: los agregan los
- * casos de uso que los necesiten (#31, #35).
+ * #29, mas {@code reservationId} y {@code reason} que necesita #31. {@code
+ * status} y los campos especificos de {@code AppointmentCancelled} siguen
+ * sin modelarse aca: los agrega el caso de uso que los necesite (#35).
  *
  * <p>{@code @JsonIgnoreProperties(ignoreUnknown = true)} es la deserializacion
  * tolerante que exige #18: un campo que este record no conoce se ignora sin
@@ -37,7 +37,11 @@ public record EventoAccionMensaje(
 
         String message,
 
-        Instant expiresAt
+        Instant expiresAt,
+
+        Long reservationId,
+
+        String reason
 
 ) {
 }
