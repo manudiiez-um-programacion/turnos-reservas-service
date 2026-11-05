@@ -3,6 +3,7 @@ package ar.edu.um.turnos.reservas.application.usecases;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
@@ -44,6 +45,11 @@ public class CrearHoldUseCaseImpl implements CrearHoldUseCase {
 
     @Override
     public ProcesoReserva crear(SolicitudHold solicitud) {
+        // HoldWebMapper.toSolicitud puede devolver null (null-guarda su
+        // entrada, como todos los mappers del proyecto): este chequeo evita
+        // que ese null llegue sin control al resto del metodo.
+        Objects.requireNonNull(solicitud, "la solicitud de hold no puede ser null");
+
         ProfesionalParaHold profesional = validarSlotCatalogoPort.validar(
                 solicitud.professionalId(), solicitud.fecha(), solicitud.horaInicio());
 
@@ -66,11 +72,10 @@ public class CrearHoldUseCaseImpl implements CrearHoldUseCase {
                 .historial(historial)
                 .build();
 
-        ProcesoReserva guardado = procesoReservaRepositoryPort.guardar(proceso);
         log.info("Hold {} creado para el proceso {} (profesional {}, usuario {})",
-                guardado.getHoldId(), guardado.getReservationProcessId(),
-                guardado.getProfessionalId(), guardado.getUsuarioId());
-        return guardado;
+                holdCreado.holdId(), holdCreado.reservationProcessId(),
+                solicitud.professionalId(), solicitud.usuarioId());
+        return procesoReservaRepositoryPort.guardar(proceso);
     }
 
 }
