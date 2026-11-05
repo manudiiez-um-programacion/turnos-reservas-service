@@ -23,6 +23,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import ar.edu.um.turnos.auth.application.service.AuthService;
 import ar.edu.um.turnos.auth.domain.model.Usuario;
+import ar.edu.um.turnos.reservas.application.exception.HoldNoEncontradoException;
+import ar.edu.um.turnos.reservas.application.exception.HoldVencidoException;
+import ar.edu.um.turnos.reservas.application.exception.ProcesoReservaAjenoException;
 import ar.edu.um.turnos.reservas.application.exception.ProfesionalDeshabilitadoException;
 import ar.edu.um.turnos.reservas.application.exception.ProfesionalNoEncontradoException;
 import ar.edu.um.turnos.reservas.application.exception.SlotInvalidoException;
@@ -170,6 +173,87 @@ class HoldControllerTest {
                         .content(cuerpoRequest()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SLOT_ALREADY_HELD"));
+    }
+
+    private String cuerpoRequestConfirmacion() {
+        return """
+                {"patientFirstName": "Juan", "patientLastName": "Perez"}
+                """;
+    }
+
+    @Test
+    void confirmaElHoldParaElUsuarioAutenticadoYDevuelve202() throws Exception {
+        when(authService.obtenerPorLogin("ana.gomez"))
+                .thenReturn(Usuario.builder().id(7L).externalPatientId("user-42").build());
+        Instant expiresAt = Instant.parse("2026-09-10T14:44:50Z");
+        ProcesoReserva proceso = ProcesoReserva.builder()
+                .holdId("hold-6c0c2f41")
+                .reservationProcessId("process-a92b47d0")
+                .estado(EstadoProcesoReserva.ESPERANDO_TELEFONO)
+                .expiresAt(expiresAt)
+                .build();
+        when(reservasService.confirmarHold(any())).thenReturn(proceso);
+
+        mockMvc.perform(post("/api/holds/hold-6c0c2f41/confirm")
+                        .principal(AUTENTICACION)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpoRequestConfirmacion()))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.reservationProcessId").value("process-a92b47d0"))
+                .andExpect(jsonPath("$.status").value("ESPERANDO_TELEFONO"));
+    }
+
+    @Test
+    void rechazaUnCuerpoDeConfirmacionSinApellidoCon400() throws Exception {
+        mockMvc.perform(post("/api/holds/hold-6c0c2f41/confirm")
+                        .principal(AUTENTICACION)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"patientFirstName": "Juan"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rechazaUnHoldInexistenteCon404() throws Exception {
+        when(authService.obtenerPorLogin("ana.gomez"))
+                .thenReturn(Usuario.builder().id(7L).externalPatientId("user-42").build());
+        when(reservasService.confirmarHold(any())).thenThrow(new HoldNoEncontradoException("hold-6c0c2f41"));
+
+        mockMvc.perform(post("/api/holds/hold-6c0c2f41/confirm")
+                        .principal(AUTENTICACION)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpoRequestConfirmacion()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("HOLD_NOT_FOUND"));
+    }
+
+    @Test
+    void rechazaUnHoldVencidoCon404() throws Exception {
+        when(authService.obtenerPorLogin("ana.gomez"))
+                .thenReturn(Usuario.builder().id(7L).externalPatientId("user-42").build());
+        when(reservasService.confirmarHold(any())).thenThrow(new HoldVencidoException("hold-6c0c2f41", null));
+
+        mockMvc.perform(post("/api/holds/hold-6c0c2f41/confirm")
+                        .principal(AUTENTICACION)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpoRequestConfirmacion()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("HOLD_EXPIRED"));
+    }
+
+    @Test
+    void rechazaConfirmarElProcesoDeOtroUsuarioCon403() throws Exception {
+        when(authService.obtenerPorLogin("ana.gomez"))
+                .thenReturn(Usuario.builder().id(7L).externalPatientId("user-42").build());
+        when(reservasService.confirmarHold(any())).thenThrow(new ProcesoReservaAjenoException("hold-6c0c2f41", 7L));
+
+        mockMvc.perform(post("/api/holds/hold-6c0c2f41/confirm")
+                        .principal(AUTENTICACION)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpoRequestConfirmacion()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("RESERVATION_PROCESS_OWNER_MISMATCH"));
     }
 
 }

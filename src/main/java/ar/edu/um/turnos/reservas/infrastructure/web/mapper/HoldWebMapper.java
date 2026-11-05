@@ -4,11 +4,13 @@ import org.springframework.stereotype.Component;
 
 import ar.edu.um.turnos.auth.domain.model.Usuario;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
+import ar.edu.um.turnos.reservas.infrastructure.web.dto.ConfirmarHoldRequest;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.CrearHoldRequest;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.HoldResponse;
 
-/** Traduce entre el borde web de holds (#27) y el dominio de {@code reservas}. */
+/** Traduce entre el borde web de holds (#27, #28) y el dominio de {@code reservas}. */
 @Component
 public class HoldWebMapper {
 
@@ -22,6 +24,19 @@ public class HoldWebMapper {
                 .horaInicio(request.startTime())
                 .usuarioId(usuario.getId())
                 .externalPatientId(usuario.getExternalPatientId())
+                .build();
+    }
+
+    public SolicitudConfirmacionHold toSolicitudConfirmacion(String holdId, ConfirmarHoldRequest request, Usuario usuario) {
+        if (request == null) {
+            return null;
+        }
+        return SolicitudConfirmacionHold.builder()
+                .holdId(holdId)
+                .usuarioId(usuario.getId())
+                .externalPatientId(usuario.getExternalPatientId())
+                .patientFirstName(request.patientFirstName())
+                .patientLastName(request.patientLastName())
                 .build();
     }
 
