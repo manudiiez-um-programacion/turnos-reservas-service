@@ -61,7 +61,10 @@ public class HoldWebMapper {
                 proceso.getHoldId(),
                 proceso.getReservationProcessId(),
                 proceso.getEstado() == null ? null : proceso.getEstado().name(),
-                proceso.getExpiresAt());
+                proceso.getExpiresAt(),
+                proceso.getReservationId(),
+                proceso.getReason(),
+                proceso.getReasonMessage());
     }
 
 }

@@ -51,7 +51,27 @@ class HoldWebMapperTest {
 
         HoldResponse respuesta = mapper.toResponse(proceso);
 
-        assertThat(respuesta).isEqualTo(new HoldResponse("hold-6c0c2f41", "process-a92b47d0", "HOLD_CREADO", expiresAt));
+        assertThat(respuesta)
+                .isEqualTo(new HoldResponse("hold-6c0c2f41", "process-a92b47d0", "HOLD_CREADO", expiresAt, null, null, null));
+    }
+
+    @Test
+    void traduceElResultadoFinalDeDominioALaRespuesta() {
+        ProcesoReserva proceso = ProcesoReserva.builder()
+                .holdId("hold-6c0c2f41")
+                .reservationProcessId("process-a92b47d0")
+                .estado(EstadoProcesoReserva.CONFIRMADA)
+                .expiresAt(Instant.parse("2026-09-10T14:44:50Z"))
+                .reservationId(8251L)
+                .reason("HOLD_EXPIRED")
+                .reasonMessage("algun mensaje")
+                .build();
+
+        HoldResponse respuesta = mapper.toResponse(proceso);
+
+        assertThat(respuesta.reservationId()).isEqualTo(8251L);
+        assertThat(respuesta.reason()).isEqualTo("HOLD_EXPIRED");
+        assertThat(respuesta.reasonMessage()).isEqualTo("algun mensaje");
     }
 
     @Test
