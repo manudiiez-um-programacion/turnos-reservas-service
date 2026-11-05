@@ -27,9 +27,11 @@ import lombok.extern.slf4j.Slf4j;
  * misma transaccion que {@link RegistrarEventoProcesadoPort#intentarRegistrar}:
  * si el efecto falla, la marca de "procesado" tiene que revertirse con el,
  * para que un reintento no trate el evento como un duplicado que nunca llego
- * a tener efecto. {@link TipoEventoAccion#SOLICITUD_INFORMACION_ADICIONAL} ya
- * esta implementado (#29); el resultado final y la cancelacion todavia no
- * (#31, #35).
+ * a tener efecto. {@link TipoEventoAccion#SOLICITUD_INFORMACION_ADICIONAL}
+ * (#29) y los cuatro resultados finales ({@link TipoEventoAccion#RESERVA_CONFIRMADA},
+ * {@link TipoEventoAccion#INFORMACION_ADICIONAL_RECHAZADA},
+ * {@link TipoEventoAccion#PROCESO_VENCIDO}, {@link TipoEventoAccion#PROCESO_INVALIDO})
+ * ya estan implementados (#31); la cancelacion todavia no (#35).
  *
  * <p>Los eventos que se descartan por schemaVersion o eventType no se
  * registran en la tabla de deduplicacion: descartarlos es siempre el mismo
@@ -77,8 +79,14 @@ public class ProcesarEventoAccionUseCaseImpl implements ProcesarEventoAccionUseC
         log.info("Evento {} recibido para el proceso de reserva {} (eventId={})",
                 evento.getTipo(), evento.getReservationProcessId(), evento.getEventId());
 
-        if (evento.getTipo() == TipoEventoAccion.SOLICITUD_INFORMACION_ADICIONAL) {
-            procesarSolicitudInformacionAdicional(evento);
+        switch (evento.getTipo()) {
+            case SOLICITUD_INFORMACION_ADICIONAL -> procesarSolicitudInformacionAdicional(evento);
+            case RESERVA_CONFIRMADA -> procesarReservaConfirmada(evento);
+            case INFORMACION_ADICIONAL_RECHAZADA -> procesarInformacionAdicionalRechazada(evento);
+            case PROCESO_VENCIDO -> procesarProcesoVencido(evento);
+            case PROCESO_INVALIDO -> procesarProcesoInvalido(evento);
+            default -> log.debug("Evento {} sin logica propia todavia (eventId={})",
+                    evento.getTipo(), evento.getEventId());
         }
     }
 
@@ -135,6 +143,142 @@ public class ProcesarEventoAccionUseCaseImpl implements ProcesarEventoAccionUseC
                     proceso.getReservationProcessId(), proceso.getEstado(), evento.getEventId());
         }
 
+        procesoReservaRepositoryPort.guardar(proceso);
+    }
+
+    /**
+     * {@code AppointmentConfirmed} (#31, §15.6 de la referencia): guarda
+     * {@code reservationId} y cierra el proceso como
+     * {@link EstadoProcesoReserva#CONFIRMADA}.
+     *
+     * <p>Transiciona desde el estado que sea (ver el javadoc de
+     * {@link EstadoProcesoReserva}): el orden entre REST y Kafka no esta
+     * garantizado, y este evento puede llegar antes de que el flujo REST
+     * local haya alcanzado {@code TELEFONO_ENVIADO}. Un proceso desconocido
+     * o ya en estado final se descarta igual que en
+     * {@link #procesarSolicitudInformacionAdicional}.
+     */
+    private void procesarReservaConfirmada(EventoAccionReserva evento) {
+        Optional<ProcesoReserva> procesoEncontrado =
+                procesoReservaRepositoryPort.buscarPorReservationProcessId(evento.getReservationProcessId());
+        if (procesoEncontrado.isEmpty()) {
+            log.warn("AppointmentConfirmed para un reservationProcessId desconocido {}: puede ser un proceso "
+                            + "perdido por un reinicio (eventId={})",
+                    evento.getReservationProcessId(), evento.getEventId());
+            return;
+        }
+
+        ProcesoReserva proceso = procesoEncontrado.get();
+        if (proceso.getEstado().esFinal()) {
+            log.info("AppointmentConfirmed descartado: el proceso {} ya esta en estado final {} (eventId={})",
+                    proceso.getReservationProcessId(), proceso.getEstado(), evento.getEventId());
+            return;
+        }
+
+        proceso.setReservationId(evento.getReservationId());
+        proceso = transicionarProcesoReservaUseCase.transicionar(proceso, EstadoProcesoReserva.CONFIRMADA, Instant.now());
+        procesoReservaRepositoryPort.guardar(proceso);
+    }
+
+    /**
+     * {@code AdditionalInformationRejected} (#31, §15.7 de la referencia):
+     * guarda {@code reason}/{@code message} y el nuevo {@code expiresAt}, y
+     * vuelve a {@link EstadoProcesoReserva#TELEFONO_RECHAZADO} para habilitar
+     * un reintento (limitado por {@code EnviarTelefonoUseCaseImpl}).
+     *
+     * <p>Los datos del rechazo se actualizan aunque no haga falta transicionar
+     * (por ejemplo, si el envio local ya lo habia hecho): el motivo mas
+     * reciente es el que el usuario tiene que ver al consultar el proceso.
+     */
+    private void procesarInformacionAdicionalRechazada(EventoAccionReserva evento) {
+        Optional<ProcesoReserva> procesoEncontrado =
+                procesoReservaRepositoryPort.buscarPorReservationProcessId(evento.getReservationProcessId());
+        if (procesoEncontrado.isEmpty()) {
+            log.warn("AdditionalInformationRejected para un reservationProcessId desconocido {}: puede ser un "
+                            + "proceso perdido por un reinicio (eventId={})",
+                    evento.getReservationProcessId(), evento.getEventId());
+            return;
+        }
+
+        ProcesoReserva proceso = procesoEncontrado.get();
+        if (proceso.getEstado().esFinal()) {
+            log.info("AdditionalInformationRejected descartado: el proceso {} ya esta en estado final {} "
+                            + "(eventId={})",
+                    proceso.getReservationProcessId(), proceso.getEstado(), evento.getEventId());
+            return;
+        }
+
+        proceso.setReason(evento.getReason());
+        proceso.setReasonMessage(evento.getMessage());
+        proceso.setExpiresAt(evento.getExpiresAt());
+
+        if (proceso.getEstado().puedeTransicionarA(EstadoProcesoReserva.TELEFONO_RECHAZADO)) {
+            proceso = transicionarProcesoReservaUseCase.transicionar(
+                    proceso, EstadoProcesoReserva.TELEFONO_RECHAZADO, Instant.now());
+        } else {
+            log.info("Proceso {} no transiciona desde {}: se actualiza igual el motivo del rechazo (eventId={})",
+                    proceso.getReservationProcessId(), proceso.getEstado(), evento.getEventId());
+        }
+
+        procesoReservaRepositoryPort.guardar(proceso);
+    }
+
+    /**
+     * {@code AppointmentProcessExpired} (#31, §15.8 y §18.3 de la referencia):
+     * guarda {@code reason} y cierra el proceso como
+     * {@link EstadoProcesoReserva#VENCIDA}, cortando nuevos intentos de
+     * confirmacion. Un evento tardio sobre un proceso ya final no lo reabre.
+     */
+    private void procesarProcesoVencido(EventoAccionReserva evento) {
+        Optional<ProcesoReserva> procesoEncontrado =
+                procesoReservaRepositoryPort.buscarPorReservationProcessId(evento.getReservationProcessId());
+        if (procesoEncontrado.isEmpty()) {
+            log.warn("AppointmentProcessExpired para un reservationProcessId desconocido {}: puede ser un "
+                            + "proceso perdido por un reinicio (eventId={})",
+                    evento.getReservationProcessId(), evento.getEventId());
+            return;
+        }
+
+        ProcesoReserva proceso = procesoEncontrado.get();
+        if (proceso.getEstado().esFinal()) {
+            log.info("AppointmentProcessExpired descartado: el proceso {} ya esta en estado final {} (eventId={})",
+                    proceso.getReservationProcessId(), proceso.getEstado(), evento.getEventId());
+            return;
+        }
+
+        proceso.setReason(evento.getReason());
+        proceso = transicionarProcesoReservaUseCase.transicionar(proceso, EstadoProcesoReserva.VENCIDA, Instant.now());
+        procesoReservaRepositoryPort.guardar(proceso);
+    }
+
+    /**
+     * {@code AppointmentProcessInvalid} (#31, §15.9 de la referencia): guarda
+     * {@code reason} y marca el proceso como {@link EstadoProcesoReserva#INVALIDA}.
+     *
+     * <p>La referencia sugiere reconciliar por REST si hace falta confirmar
+     * el estado persistido; esa reconciliacion activa es la de #36 y todavia
+     * no existe, asi que por ahora esto solo deja registrado el motivo que
+     * informo la catedra.
+     */
+    private void procesarProcesoInvalido(EventoAccionReserva evento) {
+        Optional<ProcesoReserva> procesoEncontrado =
+                procesoReservaRepositoryPort.buscarPorReservationProcessId(evento.getReservationProcessId());
+        if (procesoEncontrado.isEmpty()) {
+            log.warn("AppointmentProcessInvalid para un reservationProcessId desconocido {}: puede ser un "
+                            + "proceso perdido por un reinicio (eventId={})",
+                    evento.getReservationProcessId(), evento.getEventId());
+            return;
+        }
+
+        ProcesoReserva proceso = procesoEncontrado.get();
+        if (proceso.getEstado().esFinal()) {
+            log.info("AppointmentProcessInvalid descartado: el proceso {} ya esta en estado final {} (eventId={})",
+                    proceso.getReservationProcessId(), proceso.getEstado(), evento.getEventId());
+            return;
+        }
+
+        proceso.setReason(evento.getReason());
+        proceso = transicionarProcesoReservaUseCase.transicionar(proceso, EstadoProcesoReserva.INVALIDA, Instant.now());
         procesoReservaRepositoryPort.guardar(proceso);
     }
 
