@@ -71,6 +71,9 @@ public class ProcesoReserva {
     /** {@code message} del ultimo {@code AdditionalInformationRequested} recibido (#29). */
     private String requestMessage;
 
+    /** Telefono normalizado enviado a la catedra (#30, §15.5 de la referencia). Nunca se escribe en claro en los logs. */
+    private String telefono;
+
     /** {@code reservationId} del lado de la catedra; solo existe una vez {@link EstadoProcesoReserva#CONFIRMADA}. */
     private Long reservationId;
 
