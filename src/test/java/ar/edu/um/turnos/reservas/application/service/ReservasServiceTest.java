@@ -13,7 +13,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.EventoAccionReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
+import ar.edu.um.turnos.reservas.domain.ports.in.ConfirmarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.CrearHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ProcesarEventoAccionUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.TransicionarProcesoReservaUseCase;
@@ -30,10 +32,17 @@ class ReservasServiceTest {
     @Mock
     private CrearHoldUseCase crearHoldUseCase;
 
+    @Mock
+    private ConfirmarHoldUseCase confirmarHoldUseCase;
+
+    private ReservasService crearService() {
+        return new ReservasService(
+                procesarEventoAccionUseCase, transicionarProcesoReservaUseCase, crearHoldUseCase, confirmarHoldUseCase);
+    }
+
     @Test
     void delegaEnElCasoDeUsoDeProcesarEvento() {
-        ReservasService service =
-                new ReservasService(procesarEventoAccionUseCase, transicionarProcesoReservaUseCase, crearHoldUseCase);
+        ReservasService service = crearService();
         EventoAccionReserva evento = EventoAccionReserva.builder().eventId("un-evento").build();
 
         service.procesarEventoAccion(evento);
@@ -43,8 +52,7 @@ class ReservasServiceTest {
 
     @Test
     void delegaEnElCasoDeUsoDeTransicionar() {
-        ReservasService service =
-                new ReservasService(procesarEventoAccionUseCase, transicionarProcesoReservaUseCase, crearHoldUseCase);
+        ReservasService service = crearService();
         ProcesoReserva proceso = ProcesoReserva.builder().reservationProcessId("process-1").build();
         Instant ocurridoEn = Instant.parse("2026-09-10T14:36:00Z");
 
@@ -55,13 +63,22 @@ class ReservasServiceTest {
 
     @Test
     void delegaEnElCasoDeUsoDeCrearHold() {
-        ReservasService service =
-                new ReservasService(procesarEventoAccionUseCase, transicionarProcesoReservaUseCase, crearHoldUseCase);
+        ReservasService service = crearService();
         SolicitudHold solicitud = SolicitudHold.builder().professionalId(15L).build();
         ProcesoReserva esperado = ProcesoReserva.builder().holdId("hold-1").build();
         when(crearHoldUseCase.crear(solicitud)).thenReturn(esperado);
 
         assertThat(service.crearHold(solicitud)).isSameAs(esperado);
+    }
+
+    @Test
+    void delegaEnElCasoDeUsoDeConfirmarHold() {
+        ReservasService service = crearService();
+        SolicitudConfirmacionHold solicitud = SolicitudConfirmacionHold.builder().holdId("hold-1").build();
+        ProcesoReserva esperado = ProcesoReserva.builder().holdId("hold-1").build();
+        when(confirmarHoldUseCase.confirmar(solicitud)).thenReturn(esperado);
+
+        assertThat(service.confirmarHold(solicitud)).isSameAs(esperado);
     }
 
 }

@@ -6,7 +6,9 @@ import org.springframework.stereotype.Service;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.EventoAccionReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
+import ar.edu.um.turnos.reservas.domain.ports.in.ConfirmarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.CrearHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ProcesarEventoAccionUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.TransicionarProcesoReservaUseCase;
@@ -25,6 +27,7 @@ public class ReservasService {
     private final ProcesarEventoAccionUseCase procesarEventoAccionUseCase;
     private final TransicionarProcesoReservaUseCase transicionarProcesoReservaUseCase;
     private final CrearHoldUseCase crearHoldUseCase;
+    private final ConfirmarHoldUseCase confirmarHoldUseCase;
 
     public void procesarEventoAccion(EventoAccionReserva evento) {
         procesarEventoAccionUseCase.procesar(evento);
@@ -36,6 +39,10 @@ public class ReservasService {
 
     public ProcesoReserva crearHold(SolicitudHold solicitud) {
         return crearHoldUseCase.crear(solicitud);
+    }
+
+    public ProcesoReserva confirmarHold(SolicitudConfirmacionHold solicitud) {
+        return confirmarHoldUseCase.confirmar(solicitud);
     }
 
 }
