@@ -20,6 +20,7 @@ import ar.edu.um.turnos.disponibilidad.domain.model.ReglaHorariaSemanal;
 import ar.edu.um.turnos.disponibilidad.domain.model.Slot;
 import ar.edu.um.turnos.disponibilidad.domain.ports.in.GenerarSlotsUseCase;
 import ar.edu.um.turnos.disponibilidad.domain.ports.in.ObtenerOcupacionesUseCase;
+import ar.edu.um.turnos.disponibilidad.domain.ports.in.ObtenerTurnosDisponiblesUseCase;
 
 @ExtendWith(MockitoExtension.class)
 class DisponibilidadServiceTest {
@@ -30,11 +31,14 @@ class DisponibilidadServiceTest {
     @Mock
     private GenerarSlotsUseCase generarSlotsUseCase;
 
+    @Mock
+    private ObtenerTurnosDisponiblesUseCase obtenerTurnosDisponiblesUseCase;
+
     private DisponibilidadService service;
 
     @Test
     void delegaEnElCasoDeUsoDeOcupaciones() {
-        service = new DisponibilidadService(obtenerOcupacionesUseCase, generarSlotsUseCase);
+        service = new DisponibilidadService(obtenerOcupacionesUseCase, generarSlotsUseCase, obtenerTurnosDisponiblesUseCase);
         Long professionalId = 15L;
         LocalDate from = LocalDate.of(2026, 9, 14);
         LocalDate to = LocalDate.of(2026, 9, 14);
@@ -49,7 +53,7 @@ class DisponibilidadServiceTest {
 
     @Test
     void delegaEnElCasoDeUsoDeGenerarSlots() {
-        service = new DisponibilidadService(obtenerOcupacionesUseCase, generarSlotsUseCase);
+        service = new DisponibilidadService(obtenerOcupacionesUseCase, generarSlotsUseCase, obtenerTurnosDisponiblesUseCase);
         LocalDate fecha = LocalDate.of(2026, 9, 14);
         List<ReglaHorariaSemanal> reglas = List.of(
                 new ReglaHorariaSemanal(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(10, 0), 30, true));
@@ -60,6 +64,20 @@ class DisponibilidadServiceTest {
 
         assertThat(resultado).isEqualTo(slots);
         verify(generarSlotsUseCase).generar(reglas, fecha);
+    }
+
+    @Test
+    void delegaEnElCasoDeUsoDeObtenerTurnosDisponibles() {
+        service = new DisponibilidadService(obtenerOcupacionesUseCase, generarSlotsUseCase, obtenerTurnosDisponiblesUseCase);
+        Long professionalId = 15L;
+        LocalDate fecha = LocalDate.of(2026, 9, 14);
+        List<Slot> slots = List.of(new Slot(fecha, LocalTime.of(9, 0), LocalTime.of(9, 30)));
+        when(obtenerTurnosDisponiblesUseCase.obtener(professionalId, fecha)).thenReturn(slots);
+
+        List<Slot> resultado = service.obtenerTurnosDisponibles(professionalId, fecha);
+
+        assertThat(resultado).isEqualTo(slots);
+        verify(obtenerTurnosDisponiblesUseCase).obtener(professionalId, fecha);
     }
 
 }
