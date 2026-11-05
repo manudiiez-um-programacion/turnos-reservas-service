@@ -48,8 +48,8 @@ class EventoAccionMessagingMapperTest {
     }
 
     @Test
-    @DisplayName("ignora campos desconocidos sin romper el mapeo")
-    void ignoraCamposDesconocidos() {
+    @DisplayName("mapea los campos propios de AdditionalInformationRequested e ignora los que todavia no conoce")
+    void mapeaLosCamposDeSolicitudDeInformacionAdicionalEIgnoraLosDesconocidos() {
         String payload = """
                 {
                   "eventId": "request-event-8a31",
@@ -68,6 +68,9 @@ class EventoAccionMessagingMapperTest {
         EventoAccionReserva evento = mapper.aDominio("process-a92b47d0", payload);
 
         assertThat(evento.getTipo()).isEqualTo(TipoEventoAccion.SOLICITUD_INFORMACION_ADICIONAL);
+        assertThat(evento.getRequiredField()).isEqualTo("PHONE_NUMBER");
+        assertThat(evento.getMessage()).isEqualTo("Ingrese un numero de telefono para continuar.");
+        assertThat(evento.getExpiresAt()).isEqualTo(Instant.parse("2026-09-10T14:44:50Z"));
     }
 
     @Test
