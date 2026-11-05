@@ -80,6 +80,9 @@ public class ProcesoReservaJpaEntity {
     @Column(name = "request_message")
     private String requestMessage;
 
+    @Column(name = "telefono")
+    private String telefono;
+
     @Column(name = "reservation_id")
     private Long reservationId;
 

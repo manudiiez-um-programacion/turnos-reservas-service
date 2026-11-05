@@ -33,6 +33,7 @@ public class ProcesoReservaPersistenceMapper {
                 .requestEventId(proceso.getRequestEventId())
                 .requestRequiredField(proceso.getRequestRequiredField())
                 .requestMessage(proceso.getRequestMessage())
+                .telefono(proceso.getTelefono())
                 .reservationId(proceso.getReservationId())
                 .historial(toHistorialEmbeddable(proceso.getHistorial()))
                 .build();
@@ -57,6 +58,7 @@ public class ProcesoReservaPersistenceMapper {
                 .requestEventId(entity.getRequestEventId())
                 .requestRequiredField(entity.getRequestRequiredField())
                 .requestMessage(entity.getRequestMessage())
+                .telefono(entity.getTelefono())
                 .reservationId(entity.getReservationId())
                 .historial(toHistorialDomain(entity.getHistorial()))
                 .build();

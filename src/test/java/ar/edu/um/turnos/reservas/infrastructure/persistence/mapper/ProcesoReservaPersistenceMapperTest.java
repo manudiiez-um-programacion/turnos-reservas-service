@@ -35,6 +35,7 @@ class ProcesoReservaPersistenceMapperTest {
                 .requestEventId("request-event-8a31")
                 .requestRequiredField("PHONE_NUMBER")
                 .requestMessage("Ingrese un numero de telefono para continuar.")
+                .telefono("+5492615551234")
                 .reservationId(8251L)
                 .historial(List.of(new TransicionProcesoReserva(
                         EstadoProcesoReserva.HOLD_CREADO, Instant.parse("2026-09-10T14:35:00Z"))))
@@ -60,6 +61,7 @@ class ProcesoReservaPersistenceMapperTest {
         assertThat(entity.getRequestEventId()).isEqualTo("request-event-8a31");
         assertThat(entity.getRequestRequiredField()).isEqualTo("PHONE_NUMBER");
         assertThat(entity.getRequestMessage()).isEqualTo("Ingrese un numero de telefono para continuar.");
+        assertThat(entity.getTelefono()).isEqualTo("+5492615551234");
         assertThat(entity.getReservationId()).isEqualTo(8251L);
         assertThat(entity.getHistorial()).hasSize(1);
         assertThat(entity.getHistorial().get(0).getEstado()).isEqualTo("HOLD_CREADO");
@@ -83,6 +85,7 @@ class ProcesoReservaPersistenceMapperTest {
         assertThat(resultado.getRequestEventId()).isEqualTo(original.getRequestEventId());
         assertThat(resultado.getRequestRequiredField()).isEqualTo(original.getRequestRequiredField());
         assertThat(resultado.getRequestMessage()).isEqualTo(original.getRequestMessage());
+        assertThat(resultado.getTelefono()).isEqualTo(original.getTelefono());
         assertThat(resultado.getReservationId()).isEqualTo(original.getReservationId());
         assertThat(resultado.getHistorial()).isEqualTo(original.getHistorial());
     }
