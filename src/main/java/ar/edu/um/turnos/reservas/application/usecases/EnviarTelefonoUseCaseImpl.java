@@ -6,6 +6,7 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
 import ar.edu.um.turnos.reservas.application.exception.HoldNoEncontradoException;
+import ar.edu.um.turnos.reservas.application.exception.LimiteReintentosTelefonoException;
 import ar.edu.um.turnos.reservas.application.exception.ProcesoReservaAjenoException;
 import ar.edu.um.turnos.reservas.application.exception.ProcesoVencidoException;
 import ar.edu.um.turnos.reservas.application.exception.TelefonoInvalidoException;
@@ -37,11 +38,21 @@ import lombok.extern.slf4j.Slf4j;
  * {@code TELEFONO_ENVIADO}: no hace falta repetir ese chequeo a mano, el
  * intento de transicion ya lo aplica y lanza si el proceso esta en
  * cualquier otro estado.
+ *
+ * <p>{@code MAX_INTENTOS_TELEFONO} limita los reintentos (#31, §18.4 de la
+ * referencia): valor fijo en el codigo y no en una variable de entorno,
+ * mismo criterio que los reintentos del oyente de Kafka (#18), porque es un
+ * ajuste operativo propio y no un dato que entregue la catedra. Alcanzado el
+ * limite, el proceso sigue vivo hasta que la catedra lo cierre con su propio
+ * {@code AppointmentProcessExpired} (#31, {@code ProcesarEventoAccionUseCaseImpl});
+ * esta clase solo corta nuevos intentos locales antes de eso.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class EnviarTelefonoUseCaseImpl implements EnviarTelefonoUseCase {
+
+    private static final int MAX_INTENTOS_TELEFONO = 3;
 
     // Mismo criterio que la catedra (§15.5): primero quita espacios,
     // guiones, parentesis y puntos, despues valida el resultado.
@@ -70,7 +81,12 @@ public class EnviarTelefonoUseCaseImpl implements EnviarTelefonoUseCase {
             throw new ProcesoVencidoException(proceso.getReservationProcessId());
         }
 
+        if (proceso.getIntentosTelefono() >= MAX_INTENTOS_TELEFONO) {
+            throw new LimiteReintentosTelefonoException(proceso.getReservationProcessId(), MAX_INTENTOS_TELEFONO);
+        }
+
         proceso.setTelefono(telefonoNormalizado);
+        proceso.setIntentosTelefono(proceso.getIntentosTelefono() + 1);
         proceso = transicionarProcesoReservaUseCase.transicionar(
                 proceso, EstadoProcesoReserva.TELEFONO_ENVIADO, Instant.now());
         proceso = procesoReservaRepositoryPort.guardar(proceso);

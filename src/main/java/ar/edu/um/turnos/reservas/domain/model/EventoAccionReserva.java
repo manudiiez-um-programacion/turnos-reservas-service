@@ -14,10 +14,13 @@ import lombok.NoArgsConstructor;
  * propios de {@code AdditionalInformationRequested} ({@code requiredField},
  * {@code message}, {@code expiresAt}) que necesita #29.
  *
- * <p>Los campos propios de las otras variantes (por ejemplo {@code reason},
- * {@code status} o {@code information.phoneNumber}) no estan modelados aca a
- * proposito: la logica de cada tipo de evento es responsabilidad de los casos
- * de uso que la implementan (#31, #35), que son quienes necesitan leerlos.
+ * <p>{@code reservationId} ({@code AppointmentConfirmed}) y {@code reason}
+ * (comun a {@code AdditionalInformationRejected}, {@code
+ * AppointmentProcessExpired} y {@code AppointmentProcessInvalid}) se agregan
+ * para #31. {@code status} e {@code information.phoneNumber} siguen sin
+ * modelarse aca: el primero es redundante con {@link #tipo}, y el segundo es
+ * especifico de {@code AdditionalInformationSubmitted}, que es un evento de
+ * salida y no de entrada (#35 todavia no los necesita).
  */
 @Getter
 @Builder
@@ -43,7 +46,19 @@ public class EventoAccionReserva {
     /** {@code message} de {@code AdditionalInformationRequested} (#29, §15.4). */
     private String message;
 
-    /** {@code expiresAt} de {@code AdditionalInformationRequested}: nuevo plazo para completar el proceso (#29, §15.4). */
+    /** {@code expiresAt} de {@code AdditionalInformationRequested} o {@code AdditionalInformationRejected} (#29, #31). */
     private Instant expiresAt;
+
+    /** {@code reservationId} de {@code AppointmentConfirmed} (#31, §15.6). */
+    private Long reservationId;
+
+    /**
+     * {@code reason} de {@code AdditionalInformationRejected}, {@code
+     * AppointmentProcessExpired} o {@code AppointmentProcessInvalid} (#31,
+     * §15.7-§15.9). Valor crudo y no un enum: cada tipo de evento tiene su
+     * propio vocabulario de motivos y no hace falta modelarlos para guardarlos
+     * y mostrarlos.
+     */
+    private String reason;
 
 }

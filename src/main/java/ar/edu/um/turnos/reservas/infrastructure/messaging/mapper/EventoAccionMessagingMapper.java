@@ -43,6 +43,8 @@ public class EventoAccionMessagingMapper {
                 .requiredField(mensaje.requiredField())
                 .message(mensaje.message())
                 .expiresAt(mensaje.expiresAt())
+                .reservationId(mensaje.reservationId())
+                .reason(mensaje.reason())
                 .build();
     }
 

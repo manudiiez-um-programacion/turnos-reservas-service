@@ -9,6 +9,7 @@ import ar.edu.um.turnos.reservas.application.exception.ExternalPatientMismatchEx
 import ar.edu.um.turnos.reservas.application.exception.HoldNoEncontradoException;
 import ar.edu.um.turnos.reservas.application.exception.HoldOwnerMismatchException;
 import ar.edu.um.turnos.reservas.application.exception.HoldVencidoException;
+import ar.edu.um.turnos.reservas.application.exception.LimiteReintentosTelefonoException;
 import ar.edu.um.turnos.reservas.application.exception.ProcesoReservaAjenoException;
 import ar.edu.um.turnos.reservas.application.exception.ProcesoVencidoException;
 import ar.edu.um.turnos.reservas.application.exception.ProfesionalDeshabilitadoException;
@@ -129,6 +130,14 @@ public class ReservasExceptionHandler {
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problema.setTitle("Proceso vencido");
         problema.setProperty("code", "RESERVATION_PROCESS_EXPIRED");
+        return problema;
+    }
+
+    @ExceptionHandler(LimiteReintentosTelefonoException.class)
+    public ProblemDetail manejarLimiteReintentosTelefono(LimiteReintentosTelefonoException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problema.setTitle("Limite de reintentos de telefono alcanzado");
+        problema.setProperty("code", "PHONE_RETRY_LIMIT_EXCEEDED");
         return problema;
     }
 

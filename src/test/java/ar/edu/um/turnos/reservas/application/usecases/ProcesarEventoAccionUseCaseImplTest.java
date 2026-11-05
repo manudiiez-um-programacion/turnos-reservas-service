@@ -204,4 +204,222 @@ class ProcesarEventoAccionUseCaseImplTest {
         assertThat(capturado.getValue().getRequestRequiredField()).isEqualTo("OTRO_CAMPO");
     }
 
+    private EventoAccionReserva.EventoAccionReservaBuilder reservaConfirmadaValida() {
+        return EventoAccionReserva.builder()
+                .eventId("confirmation-event-7d10")
+                .tipo(TipoEventoAccion.RESERVA_CONFIRMADA)
+                .reservationProcessId("process-a92b47d0")
+                .holdId("hold-6c0c2f41")
+                .reservationId(8251L)
+                .schemaVersion(1);
+    }
+
+    @Test
+    @DisplayName("AppointmentConfirmed guarda reservationId y transiciona a CONFIRMADA")
+    void reservaConfirmadaGuardaReservationIdYTransicionaAConfirmada() {
+        EventoAccionReserva evento = reservaConfirmadaValida().build();
+        ProcesoReserva proceso = procesoDePrueba().estado(EstadoProcesoReserva.TELEFONO_ENVIADO).build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+        when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+
+        useCase.procesar(evento);
+
+        ArgumentCaptor<ProcesoReserva> capturado = ArgumentCaptor.forClass(ProcesoReserva.class);
+        verify(procesoReservaRepositoryPort).guardar(capturado.capture());
+        ProcesoReserva guardado = capturado.getValue();
+        assertThat(guardado.getEstado()).isEqualTo(EstadoProcesoReserva.CONFIRMADA);
+        assertThat(guardado.getReservationId()).isEqualTo(8251L);
+    }
+
+    @Test
+    @DisplayName("AppointmentConfirmed transiciona a CONFIRMADA aunque llegue antes de TELEFONO_ENVIADO")
+    void reservaConfirmadaTransicionaAunqueElRestNoHayaAvanzado() {
+        EventoAccionReserva evento = reservaConfirmadaValida().build();
+        ProcesoReserva proceso = procesoDePrueba().estado(EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA).build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+        when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+
+        useCase.procesar(evento);
+
+        ArgumentCaptor<ProcesoReserva> capturado = ArgumentCaptor.forClass(ProcesoReserva.class);
+        verify(procesoReservaRepositoryPort).guardar(capturado.capture());
+        assertThat(capturado.getValue().getEstado()).isEqualTo(EstadoProcesoReserva.CONFIRMADA);
+    }
+
+    @Test
+    @DisplayName("AppointmentConfirmed se descarta sin lanzar cuando el reservationProcessId es desconocido")
+    void reservaConfirmadaSeDescartaParaUnProcesoDesconocido() {
+        EventoAccionReserva evento = reservaConfirmadaValida().build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.empty());
+
+        assertThatCode(() -> useCase.procesar(evento)).doesNotThrowAnyException();
+
+        verify(procesoReservaRepositoryPort, never()).guardar(any());
+    }
+
+    @Test
+    @DisplayName("AppointmentConfirmed se descarta sin retroceder un proceso en estado final")
+    void reservaConfirmadaSeDescartaParaUnProcesoEnEstadoFinal() {
+        EventoAccionReserva evento = reservaConfirmadaValida().build();
+        ProcesoReserva proceso = procesoDePrueba().estado(EstadoProcesoReserva.CANCELADA).build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+
+        useCase.procesar(evento);
+
+        verify(procesoReservaRepositoryPort, never()).guardar(any());
+    }
+
+    private EventoAccionReserva.EventoAccionReservaBuilder informacionAdicionalRechazadaValida() {
+        return EventoAccionReserva.builder()
+                .eventId("rejection-event-7d11")
+                .tipo(TipoEventoAccion.INFORMACION_ADICIONAL_RECHAZADA)
+                .reservationProcessId("process-a92b47d0")
+                .holdId("hold-6c0c2f41")
+                .reason("INVALID_PHONE_NUMBER")
+                .message("El telefono ingresado no es valido.")
+                .expiresAt(Instant.parse("2026-09-10T14:44:50Z"))
+                .schemaVersion(1);
+    }
+
+    @Test
+    @DisplayName("AdditionalInformationRejected guarda el motivo y transiciona a TELEFONO_RECHAZADO")
+    void informacionAdicionalRechazadaGuardaElMotivoYTransiciona() {
+        EventoAccionReserva evento = informacionAdicionalRechazadaValida().build();
+        ProcesoReserva proceso = procesoDePrueba().estado(EstadoProcesoReserva.TELEFONO_ENVIADO).build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+        when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+
+        useCase.procesar(evento);
+
+        ArgumentCaptor<ProcesoReserva> capturado = ArgumentCaptor.forClass(ProcesoReserva.class);
+        verify(procesoReservaRepositoryPort).guardar(capturado.capture());
+        ProcesoReserva guardado = capturado.getValue();
+        assertThat(guardado.getEstado()).isEqualTo(EstadoProcesoReserva.TELEFONO_RECHAZADO);
+        assertThat(guardado.getReason()).isEqualTo("INVALID_PHONE_NUMBER");
+        assertThat(guardado.getReasonMessage()).isEqualTo("El telefono ingresado no es valido.");
+        assertThat(guardado.getExpiresAt()).isEqualTo(Instant.parse("2026-09-10T14:44:50Z"));
+    }
+
+    @Test
+    @DisplayName("AdditionalInformationRejected se descarta sin retroceder un proceso en estado final")
+    void informacionAdicionalRechazadaSeDescartaParaUnProcesoEnEstadoFinal() {
+        EventoAccionReserva evento = informacionAdicionalRechazadaValida().build();
+        ProcesoReserva proceso = procesoDePrueba().estado(EstadoProcesoReserva.CONFIRMADA).build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+
+        useCase.procesar(evento);
+
+        verify(procesoReservaRepositoryPort, never()).guardar(any());
+    }
+
+    @Test
+    @DisplayName("AdditionalInformationRejected se descarta sin lanzar cuando el reservationProcessId es desconocido")
+    void informacionAdicionalRechazadaSeDescartaParaUnProcesoDesconocido() {
+        EventoAccionReserva evento = informacionAdicionalRechazadaValida().build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.empty());
+
+        assertThatCode(() -> useCase.procesar(evento)).doesNotThrowAnyException();
+
+        verify(procesoReservaRepositoryPort, never()).guardar(any());
+    }
+
+    private EventoAccionReserva.EventoAccionReservaBuilder procesoVencidoValido() {
+        return EventoAccionReserva.builder()
+                .eventId("process-event-7d12")
+                .tipo(TipoEventoAccion.PROCESO_VENCIDO)
+                .reservationProcessId("process-a92b47d0")
+                .holdId("hold-6c0c2f41")
+                .reason("HOLD_EXPIRED")
+                .schemaVersion(1);
+    }
+
+    @Test
+    @DisplayName("AppointmentProcessExpired guarda el motivo y cierra el proceso como VENCIDA")
+    void procesoVencidoGuardaElMotivoYCierraComoVencida() {
+        EventoAccionReserva evento = procesoVencidoValido().build();
+        ProcesoReserva proceso = procesoDePrueba().build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+        when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+
+        useCase.procesar(evento);
+
+        ArgumentCaptor<ProcesoReserva> capturado = ArgumentCaptor.forClass(ProcesoReserva.class);
+        verify(procesoReservaRepositoryPort).guardar(capturado.capture());
+        ProcesoReserva guardado = capturado.getValue();
+        assertThat(guardado.getEstado()).isEqualTo(EstadoProcesoReserva.VENCIDA);
+        assertThat(guardado.getReason()).isEqualTo("HOLD_EXPIRED");
+    }
+
+    @Test
+    @DisplayName("AppointmentProcessExpired no reabre un proceso que ya esta en estado final")
+    void procesoVencidoNoReabreUnProcesoEnEstadoFinal() {
+        EventoAccionReserva evento = procesoVencidoValido().build();
+        ProcesoReserva proceso = procesoDePrueba().estado(EstadoProcesoReserva.CONFIRMADA).build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+
+        useCase.procesar(evento);
+
+        verify(procesoReservaRepositoryPort, never()).guardar(any());
+    }
+
+    private EventoAccionReserva.EventoAccionReservaBuilder procesoInvalidoValido() {
+        return EventoAccionReserva.builder()
+                .eventId("process-event-7d13")
+                .tipo(TipoEventoAccion.PROCESO_INVALIDO)
+                .reservationProcessId("process-a92b47d0")
+                .holdId("hold-6c0c2f41")
+                .reason("REQUEST_EVENT_MISMATCH")
+                .schemaVersion(1);
+    }
+
+    @Test
+    @DisplayName("AppointmentProcessInvalid guarda el motivo y marca el proceso como INVALIDA")
+    void procesoInvalidoGuardaElMotivoYMarcaComoInvalida() {
+        EventoAccionReserva evento = procesoInvalidoValido().build();
+        ProcesoReserva proceso = procesoDePrueba().build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+        when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+
+        useCase.procesar(evento);
+
+        ArgumentCaptor<ProcesoReserva> capturado = ArgumentCaptor.forClass(ProcesoReserva.class);
+        verify(procesoReservaRepositoryPort).guardar(capturado.capture());
+        ProcesoReserva guardado = capturado.getValue();
+        assertThat(guardado.getEstado()).isEqualTo(EstadoProcesoReserva.INVALIDA);
+        assertThat(guardado.getReason()).isEqualTo("REQUEST_EVENT_MISMATCH");
+    }
+
+    @Test
+    @DisplayName("AppointmentProcessInvalid se descarta sin lanzar cuando el reservationProcessId es desconocido")
+    void procesoInvalidoSeDescartaParaUnProcesoDesconocido() {
+        EventoAccionReserva evento = procesoInvalidoValido().build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.empty());
+
+        assertThatCode(() -> useCase.procesar(evento)).doesNotThrowAnyException();
+
+        verify(procesoReservaRepositoryPort, never()).guardar(any());
+    }
+
 }

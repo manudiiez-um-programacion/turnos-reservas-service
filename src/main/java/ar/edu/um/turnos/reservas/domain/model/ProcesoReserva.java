@@ -77,6 +77,27 @@ public class ProcesoReserva {
     /** {@code reservationId} del lado de la catedra; solo existe una vez {@link EstadoProcesoReserva#CONFIRMADA}. */
     private Long reservationId;
 
+    /**
+     * Motivo del ultimo resultado no exitoso ({@code reason} de {@code
+     * AdditionalInformationRejected}, {@code AppointmentProcessExpired} o
+     * {@code AppointmentProcessInvalid}, #31). Se sobreescribe con cada
+     * reintento de telefono rechazado, asi que es siempre el motivo mas
+     * reciente y no un historial.
+     */
+    private String reason;
+
+    /** {@code message} del ultimo {@code AdditionalInformationRejected} recibido (#31). Solo ese evento lo trae. */
+    private String reasonMessage;
+
+    /**
+     * Cuantas veces se envio un telefono para este proceso (#31, §18.4 de la
+     * referencia: "los reintentos deben ser limitados y observables"). Se
+     * incrementa en cada {@code POST .../phone} aceptado, incluidos los
+     * reintentos tras un {@code AdditionalInformationRejected}.
+     */
+    @Builder.Default
+    private int intentosTelefono = 0;
+
     @Builder.Default
     private List<TransicionProcesoReserva> historial = new ArrayList<>();
 
