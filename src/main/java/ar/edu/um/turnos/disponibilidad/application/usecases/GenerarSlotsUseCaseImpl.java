@@ -36,7 +36,7 @@ public class GenerarSlotsUseCaseImpl implements GenerarSlotsUseCase {
         DayOfWeek diaSemana = fecha.getDayOfWeek();
         Set<Slot> slots = new LinkedHashSet<>();
         for (ReglaHorariaSemanal regla : reglas) {
-            if (regla.enabled() && regla.dayOfWeek() == diaSemana) {
+            if (regla.enabled() && regla.dayOfWeek().equals(diaSemana)) {
                 slots.addAll(expandir(regla, fecha));
             }
         }
