@@ -21,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import ar.edu.um.turnos.reservas.application.exception.HoldNoEncontradoException;
+import ar.edu.um.turnos.reservas.application.exception.LimiteReintentosTelefonoException;
 import ar.edu.um.turnos.reservas.application.exception.ProcesoReservaAjenoException;
 import ar.edu.um.turnos.reservas.application.exception.ProcesoVencidoException;
 import ar.edu.um.turnos.reservas.application.exception.TelefonoInvalidoException;
@@ -79,6 +80,7 @@ class EnviarTelefonoUseCaseImplTest {
 
         assertThat(resultado.getEstado()).isEqualTo(EstadoProcesoReserva.TELEFONO_ENVIADO);
         assertThat(resultado.getTelefono()).isEqualTo("+5492615551234");
+        assertThat(resultado.getIntentosTelefono()).isEqualTo(1);
 
         ArgumentCaptor<InformacionAdicionalParaEnviar> capturado = ArgumentCaptor.forClass(InformacionAdicionalParaEnviar.class);
         verify(publicarInformacionAdicionalPort).publicar(capturado.capture());
@@ -92,14 +94,34 @@ class EnviarTelefonoUseCaseImplTest {
     @Test
     @DisplayName("tambien envia desde TELEFONO_RECHAZADO: el rechazo sigue vigente hasta expiresAt")
     void enviaElTelefonoParaUnProcesoCuyoTelefonoAnteriorFueRechazado() {
-        ProcesoReserva proceso = procesoDePrueba().estado(EstadoProcesoReserva.TELEFONO_RECHAZADO).build();
+        ProcesoReserva proceso = procesoDePrueba()
+                .estado(EstadoProcesoReserva.TELEFONO_RECHAZADO)
+                .intentosTelefono(1)
+                .build();
         when(procesoReservaRepositoryPort.buscarPorHoldId("hold-6c0c2f41")).thenReturn(Optional.of(proceso));
         when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
 
         ProcesoReserva resultado = useCase.enviar(solicitudValida().build());
 
         assertThat(resultado.getEstado()).isEqualTo(EstadoProcesoReserva.TELEFONO_ENVIADO);
+        assertThat(resultado.getIntentosTelefono()).isEqualTo(2);
         verify(publicarInformacionAdicionalPort).publicar(any());
+    }
+
+    @Test
+    @DisplayName("lanza LimiteReintentosTelefonoException al alcanzar el maximo de intentos, sin publicar")
+    void lanzaLimiteReintentosAlAlcanzarElMaximo() {
+        ProcesoReserva proceso = procesoDePrueba()
+                .estado(EstadoProcesoReserva.TELEFONO_RECHAZADO)
+                .intentosTelefono(3)
+                .build();
+        when(procesoReservaRepositoryPort.buscarPorHoldId("hold-6c0c2f41")).thenReturn(Optional.of(proceso));
+
+        assertThatThrownBy(() -> useCase.enviar(solicitudValida().build()))
+                .isInstanceOf(LimiteReintentosTelefonoException.class);
+
+        verify(procesoReservaRepositoryPort, never()).guardar(any());
+        verify(publicarInformacionAdicionalPort, never()).publicar(any());
     }
 
     @ParameterizedTest
