@@ -3,6 +3,7 @@ package ar.edu.um.turnos.reservas.infrastructure.web.controller;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -57,6 +58,15 @@ public class HoldController {
         Usuario usuario = authService.obtenerPorLogin(authentication.getName());
         ProcesoReserva proceso =
                 reservasService.confirmarHold(holdWebMapper.toSolicitudConfirmacion(holdId, request, usuario));
+        return holdWebMapper.toResponse(proceso);
+    }
+
+    @GetMapping("/{holdId}")
+    @ResponseStatus(HttpStatus.OK)
+    @Operation(summary = "Consultar el estado local del proceso de reserva de un hold")
+    public HoldResponse consultar(@PathVariable String holdId, Authentication authentication) {
+        Usuario usuario = authService.obtenerPorLogin(authentication.getName());
+        ProcesoReserva proceso = reservasService.consultarHold(holdId, usuario.getId());
         return holdWebMapper.toResponse(proceso);
     }
 

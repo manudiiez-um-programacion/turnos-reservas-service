@@ -9,6 +9,7 @@ import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConfirmarHoldUseCase;
+import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.CrearHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ProcesarEventoAccionUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.TransicionarProcesoReservaUseCase;
@@ -28,6 +29,7 @@ public class ReservasService {
     private final TransicionarProcesoReservaUseCase transicionarProcesoReservaUseCase;
     private final CrearHoldUseCase crearHoldUseCase;
     private final ConfirmarHoldUseCase confirmarHoldUseCase;
+    private final ConsultarHoldUseCase consultarHoldUseCase;
 
     public void procesarEventoAccion(EventoAccionReserva evento) {
         procesarEventoAccionUseCase.procesar(evento);
@@ -43,6 +45,10 @@ public class ReservasService {
 
     public ProcesoReserva confirmarHold(SolicitudConfirmacionHold solicitud) {
         return confirmarHoldUseCase.confirmar(solicitud);
+    }
+
+    public ProcesoReserva consultarHold(String holdId, Long usuarioId) {
+        return consultarHoldUseCase.consultar(holdId, usuarioId);
     }
 
 }
