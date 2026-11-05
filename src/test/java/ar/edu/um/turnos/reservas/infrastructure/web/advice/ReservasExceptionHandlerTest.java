@@ -15,11 +15,13 @@ import ar.edu.um.turnos.reservas.application.exception.HoldNoEncontradoException
 import ar.edu.um.turnos.reservas.application.exception.HoldOwnerMismatchException;
 import ar.edu.um.turnos.reservas.application.exception.HoldVencidoException;
 import ar.edu.um.turnos.reservas.application.exception.ProcesoReservaAjenoException;
+import ar.edu.um.turnos.reservas.application.exception.ProcesoVencidoException;
 import ar.edu.um.turnos.reservas.application.exception.ProfesionalDeshabilitadoException;
 import ar.edu.um.turnos.reservas.application.exception.ProfesionalNoEncontradoException;
 import ar.edu.um.turnos.reservas.application.exception.SlotInvalidoException;
 import ar.edu.um.turnos.reservas.application.exception.SlotYaBloqueadoException;
 import ar.edu.um.turnos.reservas.application.exception.SlotYaReservadoException;
+import ar.edu.um.turnos.reservas.application.exception.TelefonoInvalidoException;
 import ar.edu.um.turnos.reservas.application.exception.TransicionProcesoReservaInvalidaException;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 
@@ -129,6 +131,24 @@ class ReservasExceptionHandlerTest {
 
         assertThat(problema.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
         assertThat(problema.getProperties()).containsEntry("code", "RESERVATION_PROCESS_INVALID_STATE");
+    }
+
+    @Test
+    @DisplayName("TelefonoInvalidoException se traduce a un 400 con code INVALID_PHONE_NUMBER")
+    void telefonoInvalidoSeTraduceA400() {
+        ProblemDetail problema = handler.manejarTelefonoInvalido(new TelefonoInvalidoException());
+
+        assertThat(problema.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problema.getProperties()).containsEntry("code", "INVALID_PHONE_NUMBER");
+    }
+
+    @Test
+    @DisplayName("ProcesoVencidoException se traduce a un 404 con code RESERVATION_PROCESS_EXPIRED")
+    void procesoVencidoSeTraduceA404() {
+        ProblemDetail problema = handler.manejarProcesoVencido(new ProcesoVencidoException("process-1"));
+
+        assertThat(problema.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
+        assertThat(problema.getProperties()).containsEntry("code", "RESERVATION_PROCESS_EXPIRED");
     }
 
 }

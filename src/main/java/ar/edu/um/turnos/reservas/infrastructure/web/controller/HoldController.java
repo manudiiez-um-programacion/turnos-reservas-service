@@ -17,6 +17,7 @@ import ar.edu.um.turnos.reservas.application.service.ReservasService;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.ConfirmarHoldRequest;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.CrearHoldRequest;
+import ar.edu.um.turnos.reservas.infrastructure.web.dto.EnviarTelefonoRequest;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.HoldResponse;
 import ar.edu.um.turnos.reservas.infrastructure.web.mapper.HoldWebMapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -58,6 +59,17 @@ public class HoldController {
         Usuario usuario = authService.obtenerPorLogin(authentication.getName());
         ProcesoReserva proceso =
                 reservasService.confirmarHold(holdWebMapper.toSolicitudConfirmacion(holdId, request, usuario));
+        return holdWebMapper.toResponse(proceso);
+    }
+
+    @PostMapping("/{holdId}/phone")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @Operation(summary = "Enviar el telefono del usuario para un proceso que lo esta esperando")
+    public HoldResponse enviarTelefono(
+            @PathVariable String holdId, @Valid @RequestBody EnviarTelefonoRequest request, Authentication authentication) {
+        Usuario usuario = authService.obtenerPorLogin(authentication.getName());
+        ProcesoReserva proceso =
+                reservasService.enviarTelefono(holdWebMapper.toSolicitudEnvioTelefono(holdId, request, usuario));
         return holdWebMapper.toResponse(proceso);
     }
 

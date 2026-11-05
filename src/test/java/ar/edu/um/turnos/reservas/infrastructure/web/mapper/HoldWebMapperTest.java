@@ -12,9 +12,11 @@ import ar.edu.um.turnos.auth.domain.model.Usuario;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
+import ar.edu.um.turnos.reservas.domain.model.SolicitudEnvioTelefono;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.ConfirmarHoldRequest;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.CrearHoldRequest;
+import ar.edu.um.turnos.reservas.infrastructure.web.dto.EnviarTelefonoRequest;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.HoldResponse;
 
 class HoldWebMapperTest {
@@ -65,6 +67,20 @@ class HoldWebMapperTest {
                 .externalPatientId("user-42")
                 .patientFirstName("Juan")
                 .patientLastName("Perez")
+                .build());
+    }
+
+    @Test
+    void traduceElRequestDeTelefonoYElUsuarioAutenticadoALaSolicitudDeDominio() {
+        EnviarTelefonoRequest request = new EnviarTelefonoRequest("+54 9 261-555-1234");
+        Usuario usuario = Usuario.builder().id(7L).externalPatientId("user-42").build();
+
+        SolicitudEnvioTelefono solicitud = mapper.toSolicitudEnvioTelefono("hold-6c0c2f41", request, usuario);
+
+        assertThat(solicitud).isEqualTo(SolicitudEnvioTelefono.builder()
+                .holdId("hold-6c0c2f41")
+                .usuarioId(7L)
+                .telefono("+54 9 261-555-1234")
                 .build());
     }
 

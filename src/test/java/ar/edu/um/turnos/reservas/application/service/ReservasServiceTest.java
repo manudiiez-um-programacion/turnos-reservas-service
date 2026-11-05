@@ -14,10 +14,12 @@ import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.EventoAccionReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
+import ar.edu.um.turnos.reservas.domain.model.SolicitudEnvioTelefono;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConfirmarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.CrearHoldUseCase;
+import ar.edu.um.turnos.reservas.domain.ports.in.EnviarTelefonoUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ProcesarEventoAccionUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.TransicionarProcesoReservaUseCase;
 
@@ -39,9 +41,12 @@ class ReservasServiceTest {
     @Mock
     private ConsultarHoldUseCase consultarHoldUseCase;
 
+    @Mock
+    private EnviarTelefonoUseCase enviarTelefonoUseCase;
+
     private ReservasService crearService() {
         return new ReservasService(procesarEventoAccionUseCase, transicionarProcesoReservaUseCase, crearHoldUseCase,
-                confirmarHoldUseCase, consultarHoldUseCase);
+                confirmarHoldUseCase, consultarHoldUseCase, enviarTelefonoUseCase);
     }
 
     @Test
@@ -92,6 +97,16 @@ class ReservasServiceTest {
         when(consultarHoldUseCase.consultar("hold-1", 7L)).thenReturn(esperado);
 
         assertThat(service.consultarHold("hold-1", 7L)).isSameAs(esperado);
+    }
+
+    @Test
+    void delegaEnElCasoDeUsoDeEnviarTelefono() {
+        ReservasService service = crearService();
+        SolicitudEnvioTelefono solicitud = SolicitudEnvioTelefono.builder().holdId("hold-1").build();
+        ProcesoReserva esperado = ProcesoReserva.builder().holdId("hold-1").build();
+        when(enviarTelefonoUseCase.enviar(solicitud)).thenReturn(esperado);
+
+        assertThat(service.enviarTelefono(solicitud)).isSameAs(esperado);
     }
 
 }
