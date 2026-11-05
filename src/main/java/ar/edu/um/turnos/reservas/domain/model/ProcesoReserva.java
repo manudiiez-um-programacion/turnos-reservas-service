@@ -60,6 +60,17 @@ public class ProcesoReserva {
     /** {@code eventId} de {@code AdditionalInformationRequested}; se devuelve como {@code requestEventId} (#29). */
     private String requestEventId;
 
+    /**
+     * {@code requiredField} del ultimo {@code AdditionalInformationRequested}
+     * recibido (#29). Hoy la catedra solo envia {@code PHONE_NUMBER}, pero se
+     * guarda el valor crudo y no un enum: un valor distinto se registra en
+     * vez de asumirse (§15.4 de la referencia).
+     */
+    private String requestRequiredField;
+
+    /** {@code message} del ultimo {@code AdditionalInformationRequested} recibido (#29). */
+    private String requestMessage;
+
     /** {@code reservationId} del lado de la catedra; solo existe una vez {@link EstadoProcesoReserva#CONFIRMADA}. */
     private Long reservationId;
 

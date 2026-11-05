@@ -16,6 +16,7 @@ import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConfirmarHoldUseCase;
+import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.CrearHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ProcesarEventoAccionUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.TransicionarProcesoReservaUseCase;
@@ -35,9 +36,12 @@ class ReservasServiceTest {
     @Mock
     private ConfirmarHoldUseCase confirmarHoldUseCase;
 
+    @Mock
+    private ConsultarHoldUseCase consultarHoldUseCase;
+
     private ReservasService crearService() {
-        return new ReservasService(
-                procesarEventoAccionUseCase, transicionarProcesoReservaUseCase, crearHoldUseCase, confirmarHoldUseCase);
+        return new ReservasService(procesarEventoAccionUseCase, transicionarProcesoReservaUseCase, crearHoldUseCase,
+                confirmarHoldUseCase, consultarHoldUseCase);
     }
 
     @Test
@@ -79,6 +83,15 @@ class ReservasServiceTest {
         when(confirmarHoldUseCase.confirmar(solicitud)).thenReturn(esperado);
 
         assertThat(service.confirmarHold(solicitud)).isSameAs(esperado);
+    }
+
+    @Test
+    void delegaEnElCasoDeUsoDeConsultarHold() {
+        ReservasService service = crearService();
+        ProcesoReserva esperado = ProcesoReserva.builder().holdId("hold-1").build();
+        when(consultarHoldUseCase.consultar("hold-1", 7L)).thenReturn(esperado);
+
+        assertThat(service.consultarHold("hold-1", 7L)).isSameAs(esperado);
     }
 
 }

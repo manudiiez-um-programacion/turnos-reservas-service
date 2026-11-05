@@ -33,6 +33,8 @@ class ProcesoReservaPersistenceMapperTest {
                 .estado(EstadoProcesoReserva.ESPERANDO_TELEFONO)
                 .expiresAt(Instant.parse("2026-09-10T14:44:50Z"))
                 .requestEventId("request-event-8a31")
+                .requestRequiredField("PHONE_NUMBER")
+                .requestMessage("Ingrese un numero de telefono para continuar.")
                 .reservationId(8251L)
                 .historial(List.of(new TransicionProcesoReserva(
                         EstadoProcesoReserva.HOLD_CREADO, Instant.parse("2026-09-10T14:35:00Z"))))
@@ -56,6 +58,8 @@ class ProcesoReservaPersistenceMapperTest {
         assertThat(entity.getEstado()).isEqualTo("ESPERANDO_TELEFONO");
         assertThat(entity.getExpiresAt()).isEqualTo(Instant.parse("2026-09-10T14:44:50Z"));
         assertThat(entity.getRequestEventId()).isEqualTo("request-event-8a31");
+        assertThat(entity.getRequestRequiredField()).isEqualTo("PHONE_NUMBER");
+        assertThat(entity.getRequestMessage()).isEqualTo("Ingrese un numero de telefono para continuar.");
         assertThat(entity.getReservationId()).isEqualTo(8251L);
         assertThat(entity.getHistorial()).hasSize(1);
         assertThat(entity.getHistorial().get(0).getEstado()).isEqualTo("HOLD_CREADO");
@@ -76,6 +80,9 @@ class ProcesoReservaPersistenceMapperTest {
         assertThat(resultado.getProfessionalId()).isEqualTo(original.getProfessionalId());
         assertThat(resultado.getEstado()).isEqualTo(original.getEstado());
         assertThat(resultado.getExpiresAt()).isEqualTo(original.getExpiresAt());
+        assertThat(resultado.getRequestEventId()).isEqualTo(original.getRequestEventId());
+        assertThat(resultado.getRequestRequiredField()).isEqualTo(original.getRequestRequiredField());
+        assertThat(resultado.getRequestMessage()).isEqualTo(original.getRequestMessage());
         assertThat(resultado.getReservationId()).isEqualTo(original.getReservationId());
         assertThat(resultado.getHistorial()).isEqualTo(original.getHistorial());
     }

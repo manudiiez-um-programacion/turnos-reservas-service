@@ -40,6 +40,9 @@ public class EventoAccionMessagingMapper {
                 .holdId(mensaje.holdId())
                 .occurredAt(mensaje.occurredAt())
                 .schemaVersion(mensaje.schemaVersion())
+                .requiredField(mensaje.requiredField())
+                .message(mensaje.message())
+                .expiresAt(mensaje.expiresAt())
                 .build();
     }
 
