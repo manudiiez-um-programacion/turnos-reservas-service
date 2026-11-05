@@ -95,4 +95,22 @@ class ObtenerTurnosDisponiblesUseCaseImplTest {
         verify(obtenerOcupacionesUseCase, never()).obtener(PROFESIONAL_ID, FECHA, FECHA);
     }
 
+    @Test
+    @DisplayName("una ocupacion en una hora que no existe en la agenda se ignora sin romper")
+    void unaOcupacionFueraDeLaAgendaSeIgnoraSinRomper() {
+        List<ReglaHorariaSemanal> reglas = List.of(
+                new ReglaHorariaSemanal(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(10, 0), 30, true));
+        List<Slot> slotsGenerados = List.of(
+                new Slot(FECHA, LocalTime.of(9, 0), LocalTime.of(9, 30)),
+                new Slot(FECHA, LocalTime.of(9, 30), LocalTime.of(10, 0)));
+        Ocupacion ocupacionFueraDeLaAgenda = new Ocupacion(FECHA, LocalTime.of(11, 0), EstadoOcupacion.CONFIRMADA, null);
+        when(consultarAgendaVigenteCatalogoPort.consultar(PROFESIONAL_ID)).thenReturn(reglas);
+        when(generarSlotsUseCase.generar(reglas, FECHA)).thenReturn(slotsGenerados);
+        when(obtenerOcupacionesUseCase.obtener(PROFESIONAL_ID, FECHA, FECHA)).thenReturn(List.of(ocupacionFueraDeLaAgenda));
+
+        List<Slot> resultado = useCase.obtener(PROFESIONAL_ID, FECHA);
+
+        assertThat(resultado).containsExactlyElementsOf(slotsGenerados);
+    }
+
 }
