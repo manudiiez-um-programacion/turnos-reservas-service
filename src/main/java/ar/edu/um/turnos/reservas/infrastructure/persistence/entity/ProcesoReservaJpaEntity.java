@@ -86,6 +86,15 @@ public class ProcesoReservaJpaEntity {
     @Column(name = "reservation_id")
     private Long reservationId;
 
+    @Column(name = "reason")
+    private String reason;
+
+    @Column(name = "reason_message")
+    private String reasonMessage;
+
+    @Column(name = "intentos_telefono", nullable = false)
+    private int intentosTelefono;
+
     @Builder.Default
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "proceso_reserva_transicion", joinColumns = @JoinColumn(name = "proceso_reserva_id"))

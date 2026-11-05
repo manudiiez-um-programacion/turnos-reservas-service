@@ -37,6 +37,9 @@ class ProcesoReservaPersistenceMapperTest {
                 .requestMessage("Ingrese un numero de telefono para continuar.")
                 .telefono("+5492615551234")
                 .reservationId(8251L)
+                .reason("INVALID_PHONE_NUMBER")
+                .reasonMessage("El telefono ingresado no es valido.")
+                .intentosTelefono(2)
                 .historial(List.of(new TransicionProcesoReserva(
                         EstadoProcesoReserva.HOLD_CREADO, Instant.parse("2026-09-10T14:35:00Z"))))
                 .build();
@@ -63,6 +66,9 @@ class ProcesoReservaPersistenceMapperTest {
         assertThat(entity.getRequestMessage()).isEqualTo("Ingrese un numero de telefono para continuar.");
         assertThat(entity.getTelefono()).isEqualTo("+5492615551234");
         assertThat(entity.getReservationId()).isEqualTo(8251L);
+        assertThat(entity.getReason()).isEqualTo("INVALID_PHONE_NUMBER");
+        assertThat(entity.getReasonMessage()).isEqualTo("El telefono ingresado no es valido.");
+        assertThat(entity.getIntentosTelefono()).isEqualTo(2);
         assertThat(entity.getHistorial()).hasSize(1);
         assertThat(entity.getHistorial().get(0).getEstado()).isEqualTo("HOLD_CREADO");
         assertThat(entity.getHistorial().get(0).getOcurridoEn()).isEqualTo(Instant.parse("2026-09-10T14:35:00Z"));
@@ -87,6 +93,9 @@ class ProcesoReservaPersistenceMapperTest {
         assertThat(resultado.getRequestMessage()).isEqualTo(original.getRequestMessage());
         assertThat(resultado.getTelefono()).isEqualTo(original.getTelefono());
         assertThat(resultado.getReservationId()).isEqualTo(original.getReservationId());
+        assertThat(resultado.getReason()).isEqualTo(original.getReason());
+        assertThat(resultado.getReasonMessage()).isEqualTo(original.getReasonMessage());
+        assertThat(resultado.getIntentosTelefono()).isEqualTo(original.getIntentosTelefono());
         assertThat(resultado.getHistorial()).isEqualTo(original.getHistorial());
     }
 
