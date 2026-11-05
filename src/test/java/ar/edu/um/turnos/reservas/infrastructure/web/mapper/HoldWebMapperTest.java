@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test;
 import ar.edu.um.turnos.auth.domain.model.Usuario;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
+import ar.edu.um.turnos.reservas.infrastructure.web.dto.ConfirmarHoldRequest;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.CrearHoldRequest;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.HoldResponse;
 
@@ -48,6 +50,22 @@ class HoldWebMapperTest {
         HoldResponse respuesta = mapper.toResponse(proceso);
 
         assertThat(respuesta).isEqualTo(new HoldResponse("hold-6c0c2f41", "process-a92b47d0", "HOLD_CREADO", expiresAt));
+    }
+
+    @Test
+    void traduceElRequestDeConfirmacionYElUsuarioAutenticadoALaSolicitudDeDominio() {
+        ConfirmarHoldRequest request = new ConfirmarHoldRequest("Juan", "Perez");
+        Usuario usuario = Usuario.builder().id(7L).externalPatientId("user-42").build();
+
+        SolicitudConfirmacionHold solicitud = mapper.toSolicitudConfirmacion("hold-6c0c2f41", request, usuario);
+
+        assertThat(solicitud).isEqualTo(SolicitudConfirmacionHold.builder()
+                .holdId("hold-6c0c2f41")
+                .usuarioId(7L)
+                .externalPatientId("user-42")
+                .patientFirstName("Juan")
+                .patientLastName("Perez")
+                .build());
     }
 
 }
