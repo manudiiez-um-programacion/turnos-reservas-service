@@ -31,6 +31,8 @@ public class ProcesoReservaPersistenceMapper {
                 .estado(proceso.getEstado() == null ? null : proceso.getEstado().name())
                 .expiresAt(proceso.getExpiresAt())
                 .requestEventId(proceso.getRequestEventId())
+                .requestRequiredField(proceso.getRequestRequiredField())
+                .requestMessage(proceso.getRequestMessage())
                 .reservationId(proceso.getReservationId())
                 .historial(toHistorialEmbeddable(proceso.getHistorial()))
                 .build();
@@ -53,6 +55,8 @@ public class ProcesoReservaPersistenceMapper {
                 .estado(entity.getEstado() == null ? null : EstadoProcesoReserva.valueOf(entity.getEstado()))
                 .expiresAt(entity.getExpiresAt())
                 .requestEventId(entity.getRequestEventId())
+                .requestRequiredField(entity.getRequestRequiredField())
+                .requestMessage(entity.getRequestMessage())
                 .reservationId(entity.getReservationId())
                 .historial(toHistorialDomain(entity.getHistorial()))
                 .build();
