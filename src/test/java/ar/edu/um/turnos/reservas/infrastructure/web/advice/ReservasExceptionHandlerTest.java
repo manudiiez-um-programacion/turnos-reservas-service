@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 
+import ar.edu.um.turnos.reservas.application.exception.EstadoReservaInvalidoException;
 import ar.edu.um.turnos.reservas.application.exception.ExternalPatientMismatchException;
 import ar.edu.um.turnos.reservas.application.exception.HoldNoEncontradoException;
 import ar.edu.um.turnos.reservas.application.exception.HoldOwnerMismatchException;
@@ -160,6 +161,15 @@ class ReservasExceptionHandlerTest {
 
         assertThat(problema.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
         assertThat(problema.getProperties()).containsEntry("code", "PHONE_RETRY_LIMIT_EXCEEDED");
+    }
+
+    @Test
+    @DisplayName("EstadoReservaInvalidoException se traduce a un 400 con code INVALID_STATUS")
+    void estadoReservaInvalidoSeTraduceA400() {
+        ProblemDetail problema = handler.manejarEstadoReservaInvalido(new EstadoReservaInvalidoException("NO_EXISTE"));
+
+        assertThat(problema.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problema.getProperties()).containsEntry("code", "INVALID_STATUS");
     }
 
 }

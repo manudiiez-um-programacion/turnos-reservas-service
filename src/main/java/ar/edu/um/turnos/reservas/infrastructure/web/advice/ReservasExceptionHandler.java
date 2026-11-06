@@ -5,6 +5,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import ar.edu.um.turnos.reservas.application.exception.EstadoReservaInvalidoException;
 import ar.edu.um.turnos.reservas.application.exception.ExternalPatientMismatchException;
 import ar.edu.um.turnos.reservas.application.exception.HoldNoEncontradoException;
 import ar.edu.um.turnos.reservas.application.exception.HoldOwnerMismatchException;
@@ -138,6 +139,14 @@ public class ReservasExceptionHandler {
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problema.setTitle("Limite de reintentos de telefono alcanzado");
         problema.setProperty("code", "PHONE_RETRY_LIMIT_EXCEEDED");
+        return problema;
+    }
+
+    @ExceptionHandler(EstadoReservaInvalidoException.class)
+    public ProblemDetail manejarEstadoReservaInvalido(EstadoReservaInvalidoException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problema.setTitle("Estado invalido");
+        problema.setProperty("code", "INVALID_STATUS");
         return problema;
     }
 

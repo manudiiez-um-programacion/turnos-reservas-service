@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +67,8 @@ import ar.edu.um.turnos.auth.application.service.AuthService;
 import ar.edu.um.turnos.auth.domain.model.Usuario;
 import ar.edu.um.turnos.config.JwtProperties;
 import ar.edu.um.turnos.reservas.domain.model.EventoAccionReserva;
+import ar.edu.um.turnos.reservas.domain.model.FiltroReservasUsuario;
+import ar.edu.um.turnos.reservas.domain.model.PaginaProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.ports.out.ProcesoReservaRepositoryPort;
 import ar.edu.um.turnos.reservas.domain.ports.out.RegistrarEventoProcesadoPort;
@@ -305,6 +308,23 @@ class ReservaEndToEndTest {
         @Override
         public Optional<ProcesoReserva> buscarPorHoldId(String holdId) {
             return Optional.ofNullable(porHoldId.get(holdId));
+        }
+
+        @Override
+        public PaginaProcesoReserva buscarPorUsuario(FiltroReservasUsuario filtro) {
+            List<ProcesoReserva> coincidentes = porHoldId.values().stream()
+                    .filter(proceso -> proceso.getUsuarioId().equals(filtro.usuarioId()))
+                    .filter(proceso -> filtro.estado() == null || filtro.estado() == proceso.getEstado())
+                    .filter(proceso -> filtro.desde() == null || !proceso.getFecha().isBefore(filtro.desde()))
+                    .filter(proceso -> filtro.hasta() == null || !proceso.getFecha().isAfter(filtro.hasta()))
+                    .sorted(Comparator.comparing(ProcesoReserva::getFecha).thenComparing(ProcesoReserva::getHoraInicio)
+                            .reversed())
+                    .toList();
+            List<ProcesoReserva> pagina = coincidentes.stream()
+                    .skip((long) filtro.pagina() * filtro.tamanio())
+                    .limit(filtro.tamanio())
+                    .toList();
+            return new PaginaProcesoReserva(pagina, coincidentes.size());
         }
 
     }
