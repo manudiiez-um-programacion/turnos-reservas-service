@@ -28,10 +28,11 @@ import lombok.extern.slf4j.Slf4j;
  * si el efecto falla, la marca de "procesado" tiene que revertirse con el,
  * para que un reintento no trate el evento como un duplicado que nunca llego
  * a tener efecto. {@link TipoEventoAccion#SOLICITUD_INFORMACION_ADICIONAL}
- * (#29) y los cuatro resultados finales ({@link TipoEventoAccion#RESERVA_CONFIRMADA},
+ * (#29), los cuatro resultados finales ({@link TipoEventoAccion#RESERVA_CONFIRMADA},
  * {@link TipoEventoAccion#INFORMACION_ADICIONAL_RECHAZADA},
  * {@link TipoEventoAccion#PROCESO_VENCIDO}, {@link TipoEventoAccion#PROCESO_INVALIDO})
- * ya estan implementados (#31); la cancelacion todavia no (#35).
+ * (#31) y la cancelacion ({@link TipoEventoAccion#RESERVA_CANCELADA}, #35) ya
+ * estan implementados.
  *
  * <p>Los eventos que se descartan por schemaVersion o eventType no se
  * registran en la tabla de deduplicacion: descartarlos es siempre el mismo
@@ -85,6 +86,7 @@ public class ProcesarEventoAccionUseCaseImpl implements ProcesarEventoAccionUseC
             case INFORMACION_ADICIONAL_RECHAZADA -> procesarInformacionAdicionalRechazada(evento);
             case PROCESO_VENCIDO -> procesarProcesoVencido(evento);
             case PROCESO_INVALIDO -> procesarProcesoInvalido(evento);
+            case RESERVA_CANCELADA -> procesarReservaCancelada(evento);
             default -> log.debug("Evento {} sin logica propia todavia (eventId={})",
                     evento.getTipo(), evento.getEventId());
         }
@@ -279,6 +281,50 @@ public class ProcesarEventoAccionUseCaseImpl implements ProcesarEventoAccionUseC
 
         proceso.setReason(evento.getReason());
         proceso = transicionarProcesoReservaUseCase.transicionar(proceso, EstadoProcesoReserva.INVALIDA, Instant.now());
+        procesoReservaRepositoryPort.guardar(proceso);
+    }
+
+    /**
+     * {@code AppointmentCancelled} (#35, §15.10 de la referencia): guarda
+     * {@code cancelReason} (puede ser {@code null}) y {@code cancelledAt}, y
+     * cierra el proceso como {@link EstadoProcesoReserva#CANCELADA}.
+     *
+     * <p>Solo es alcanzable desde {@link EstadoProcesoReserva#CONFIRMADA}
+     * (ver {@link EstadoProcesoReserva#puedeTransicionarA}): la catedra nunca
+     * cancela una reserva que no haya confirmado antes, y Kafka preserva el
+     * orden de los eventos con la misma key ({@code reservationProcessId}),
+     * asi que {@code AppointmentConfirmed} ya tiene que haber llegado. Por
+     * eso el chequeo de abajo usa {@code puedeTransicionarA} y no {@code
+     * esFinal}: a diferencia de los demas eventos de resultado, el origen
+     * valido de esta transicion ({@code CONFIRMADA}) es en si mismo un
+     * estado final. Ese chequeo cubre los dos ordenes posibles entre REST
+     * (#34) y Kafka: si la cancelacion ya se aplico por REST, el proceso ya
+     * esta {@code CANCELADA} y este evento se descarta sin pisar el {@code
+     * cancelledAt} ni el {@code cancelReason} originales; si la catedra
+     * cancelo primero, este evento es la unica senal y aplica la transicion
+     * con los datos que trae.
+     */
+    private void procesarReservaCancelada(EventoAccionReserva evento) {
+        Optional<ProcesoReserva> procesoEncontrado =
+                procesoReservaRepositoryPort.buscarPorReservationProcessId(evento.getReservationProcessId());
+        if (procesoEncontrado.isEmpty()) {
+            log.warn("AppointmentCancelled para un reservationProcessId desconocido {}: puede ser un "
+                            + "proceso perdido por un reinicio (eventId={})",
+                    evento.getReservationProcessId(), evento.getEventId());
+            return;
+        }
+
+        ProcesoReserva proceso = procesoEncontrado.get();
+        if (!proceso.getEstado().puedeTransicionarA(EstadoProcesoReserva.CANCELADA)) {
+            log.info("AppointmentCancelled descartado: el proceso {} esta en estado {} y no admite la "
+                            + "cancelacion (eventId={})",
+                    proceso.getReservationProcessId(), proceso.getEstado(), evento.getEventId());
+            return;
+        }
+
+        proceso.setCancelReason(evento.getReason());
+        proceso.setCancelledAt(evento.getOccurredAt());
+        proceso = transicionarProcesoReservaUseCase.transicionar(proceso, EstadoProcesoReserva.CANCELADA, Instant.now());
         procesoReservaRepositoryPort.guardar(proceso);
     }
 
