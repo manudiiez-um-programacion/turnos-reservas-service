@@ -33,7 +33,11 @@ public record ReservaResponse(
 
         String reason,
 
-        String reasonMessage
+        String reasonMessage,
+
+        Instant cancelledAt,
+
+        String cancelReason
 
 ) {
 }

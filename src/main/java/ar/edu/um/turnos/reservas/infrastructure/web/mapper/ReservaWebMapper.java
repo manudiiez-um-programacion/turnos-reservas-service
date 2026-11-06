@@ -4,11 +4,14 @@ import java.time.LocalDate;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
+import ar.edu.um.turnos.auth.domain.model.Usuario;
 import ar.edu.um.turnos.reservas.application.exception.EstadoReservaInvalidoException;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.FiltroReservasUsuario;
 import ar.edu.um.turnos.reservas.domain.model.PaginaProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.SolicitudCancelacionReserva;
+import ar.edu.um.turnos.reservas.infrastructure.web.dto.CancelarReservaRequest;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.ReservaResponse;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.ReservasPaginaResponse;
 
@@ -52,7 +55,17 @@ public class ReservaWebMapper {
                 proceso.getExpiresAt(),
                 proceso.getReservationId(),
                 proceso.getReason(),
-                proceso.getReasonMessage());
+                proceso.getReasonMessage(),
+                proceso.getCancelledAt(),
+                proceso.getCancelReason());
+    }
+
+    public SolicitudCancelacionReserva toSolicitudCancelacion(String reservationProcessId, CancelarReservaRequest request, Usuario usuario) {
+        return SolicitudCancelacionReserva.builder()
+                .reservationProcessId(reservationProcessId)
+                .usuarioId(usuario.getId())
+                .reason(request == null ? null : request.reason())
+                .build();
     }
 
     private EstadoProcesoReserva toEstado(String status) {

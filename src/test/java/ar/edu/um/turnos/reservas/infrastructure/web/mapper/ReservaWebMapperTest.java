@@ -9,11 +9,14 @@ import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+import ar.edu.um.turnos.auth.domain.model.Usuario;
 import ar.edu.um.turnos.reservas.application.exception.EstadoReservaInvalidoException;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.FiltroReservasUsuario;
 import ar.edu.um.turnos.reservas.domain.model.PaginaProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.SolicitudCancelacionReserva;
+import ar.edu.um.turnos.reservas.infrastructure.web.dto.CancelarReservaRequest;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.ReservaResponse;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.ReservasPaginaResponse;
 
@@ -76,7 +79,48 @@ class ReservaWebMapperTest {
 
         assertThat(respuesta).isEqualTo(new ReservaResponse(
                 "hold-6c0c2f41", "process-a92b47d0", "CONFIRMADA", 15L, "Juan", "Perez",
-                LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), expiresAt, 8251L, null, null));
+                LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), expiresAt, 8251L, null, null, null, null));
+    }
+
+    @Test
+    void traduceElProcesoCanceladoConCancelledAtYCancelReason() {
+        Instant cancelledAt = Instant.parse("2026-09-11T15:10:00Z");
+        ProcesoReserva proceso = ProcesoReserva.builder()
+                .holdId("hold-6c0c2f41")
+                .reservationProcessId("process-a92b47d0")
+                .estado(EstadoProcesoReserva.CANCELADA)
+                .reservationId(8251L)
+                .cancelledAt(cancelledAt)
+                .cancelReason("Cambio solicitado por el usuario")
+                .build();
+
+        ReservaResponse respuesta = mapper.toResponse(proceso);
+
+        assertThat(respuesta.cancelledAt()).isEqualTo(cancelledAt);
+        assertThat(respuesta.cancelReason()).isEqualTo("Cambio solicitado por el usuario");
+    }
+
+    @Test
+    void traduceLaSolicitudDeCancelacion() {
+        Usuario usuario = Usuario.builder().id(7L).login("usuario.propietario").build();
+        CancelarReservaRequest request = new CancelarReservaRequest("Cambio solicitado por el usuario");
+
+        SolicitudCancelacionReserva solicitud = mapper.toSolicitudCancelacion("process-a92b47d0", request, usuario);
+
+        assertThat(solicitud).isEqualTo(SolicitudCancelacionReserva.builder()
+                .reservationProcessId("process-a92b47d0")
+                .usuarioId(7L)
+                .reason("Cambio solicitado por el usuario")
+                .build());
+    }
+
+    @Test
+    void traduceLaSolicitudDeCancelacionSinBody() {
+        Usuario usuario = Usuario.builder().id(7L).login("usuario.propietario").build();
+
+        SolicitudCancelacionReserva solicitud = mapper.toSolicitudCancelacion("process-a92b47d0", null, usuario);
+
+        assertThat(solicitud.reason()).isNull();
     }
 
     @Test
