@@ -19,6 +19,7 @@ import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarReservasUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.CrearHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.EnviarTelefonoUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ProcesarEventoAccionUseCase;
+import ar.edu.um.turnos.reservas.domain.ports.in.RecuperarProcesosPendientesUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.TransicionarProcesoReservaUseCase;
 import lombok.RequiredArgsConstructor;
 
@@ -40,6 +41,7 @@ public class ReservasService {
     private final EnviarTelefonoUseCase enviarTelefonoUseCase;
     private final ConsultarReservasUseCase consultarReservasUseCase;
     private final CancelarReservaUseCase cancelarReservaUseCase;
+    private final RecuperarProcesosPendientesUseCase recuperarProcesosPendientesUseCase;
 
     public void procesarEventoAccion(EventoAccionReserva evento) {
         procesarEventoAccionUseCase.procesar(evento);
@@ -71,6 +73,10 @@ public class ReservasService {
 
     public ProcesoReserva cancelarReserva(SolicitudCancelacionReserva solicitud) {
         return cancelarReservaUseCase.cancelar(solicitud);
+    }
+
+    public void recuperarProcesosPendientes() {
+        recuperarProcesosPendientesUseCase.recuperar();
     }
 
 }

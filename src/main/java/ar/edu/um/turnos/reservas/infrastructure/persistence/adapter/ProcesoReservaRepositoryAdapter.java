@@ -3,6 +3,7 @@ package ar.edu.um.turnos.reservas.infrastructure.persistence.adapter;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -60,6 +61,13 @@ public class ProcesoReservaRepositoryAdapter implements ProcesoReservaRepository
                 .findFirstByUsuarioIdAndProfessionalIdAndFechaAndHoraInicioAndEstadoNotInAndExpiresAtAfter(
                         usuarioId, professionalId, fecha, horaInicio, EstadoProcesoReserva.nombresFinales(), ahora)
                 .map(mapper::toDomain);
+    }
+
+    @Override
+    public List<ProcesoReserva> listarNoFinales() {
+        return procesoReservaJpaRepository.findByEstadoNotIn(EstadoProcesoReserva.nombresFinales()).stream()
+                .map(mapper::toDomain)
+                .toList();
     }
 
 }

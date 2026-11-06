@@ -3,6 +3,7 @@ package ar.edu.um.turnos.reservas.domain.ports.out;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Optional;
 
 import ar.edu.um.turnos.reservas.domain.model.FiltroReservasUsuario;
@@ -36,5 +37,11 @@ public interface ProcesoReservaRepositoryPort {
      */
     Optional<ProcesoReserva> buscarVigentePorSlot(
             Long usuarioId, Long professionalId, LocalDate fecha, LocalTime horaInicio, Instant ahora);
+
+    /**
+     * Todos los procesos en un estado no final (#37): los que un reinicio
+     * del servicio puede haber dejado a medio camino.
+     */
+    List<ProcesoReserva> listarNoFinales();
 
 }
