@@ -351,6 +351,11 @@ class ReservaEndToEndTest {
                     .findFirst();
         }
 
+        @Override
+        public List<ProcesoReserva> listarNoFinales() {
+            return porHoldId.values().stream().filter(proceso -> !proceso.getEstado().esFinal()).toList();
+        }
+
         void limpiar() {
             porReservationProcessId.clear();
             porHoldId.clear();

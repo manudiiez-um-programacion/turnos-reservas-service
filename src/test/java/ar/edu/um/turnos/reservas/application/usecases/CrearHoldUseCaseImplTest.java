@@ -66,6 +66,7 @@ class CrearHoldUseCaseImplTest {
         assertThat(proceso.getHoldId()).isEqualTo("hold-6c0c2f41");
         assertThat(proceso.getReservationProcessId()).isEqualTo("process-a92b47d0");
         assertThat(proceso.getUsuarioId()).isEqualTo(7L);
+        assertThat(proceso.getExternalPatientId()).isEqualTo("user-42");
         assertThat(proceso.getProfessionalId()).isEqualTo(15L);
         assertThat(proceso.getProfessionalNombreHistorico()).isEqualTo("Ana");
         assertThat(proceso.getProfessionalApellidoHistorico()).isEqualTo("Gomez");

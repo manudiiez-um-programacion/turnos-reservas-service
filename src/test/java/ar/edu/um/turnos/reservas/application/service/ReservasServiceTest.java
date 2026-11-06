@@ -27,6 +27,7 @@ import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarReservasUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.CrearHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.EnviarTelefonoUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ProcesarEventoAccionUseCase;
+import ar.edu.um.turnos.reservas.domain.ports.in.RecuperarProcesosPendientesUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.TransicionarProcesoReservaUseCase;
 
 @ExtendWith(MockitoExtension.class)
@@ -56,10 +57,13 @@ class ReservasServiceTest {
     @Mock
     private CancelarReservaUseCase cancelarReservaUseCase;
 
+    @Mock
+    private RecuperarProcesosPendientesUseCase recuperarProcesosPendientesUseCase;
+
     private ReservasService crearService() {
         return new ReservasService(procesarEventoAccionUseCase, transicionarProcesoReservaUseCase, crearHoldUseCase,
                 confirmarHoldUseCase, consultarHoldUseCase, enviarTelefonoUseCase, consultarReservasUseCase,
-                cancelarReservaUseCase);
+                cancelarReservaUseCase, recuperarProcesosPendientesUseCase);
     }
 
     @Test
@@ -141,6 +145,15 @@ class ReservasServiceTest {
         when(cancelarReservaUseCase.cancelar(solicitud)).thenReturn(esperado);
 
         assertThat(service.cancelarReserva(solicitud)).isSameAs(esperado);
+    }
+
+    @Test
+    void delegaEnElCasoDeUsoDeRecuperarProcesosPendientes() {
+        ReservasService service = crearService();
+
+        service.recuperarProcesosPendientes();
+
+        verify(recuperarProcesosPendientesUseCase).recuperar();
     }
 
 }

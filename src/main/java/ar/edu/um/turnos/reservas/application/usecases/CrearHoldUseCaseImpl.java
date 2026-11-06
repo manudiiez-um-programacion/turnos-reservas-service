@@ -76,6 +76,7 @@ public class CrearHoldUseCaseImpl implements CrearHoldUseCase {
                 .reservationProcessId(holdCreado.reservationProcessId())
                 .holdId(holdCreado.holdId())
                 .usuarioId(solicitud.usuarioId())
+                .externalPatientId(solicitud.externalPatientId())
                 .professionalId(solicitud.professionalId())
                 .professionalNombreHistorico(profesional.nombre())
                 .professionalApellidoHistorico(profesional.apellido())

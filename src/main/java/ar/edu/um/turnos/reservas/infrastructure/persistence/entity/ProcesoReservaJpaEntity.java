@@ -50,6 +50,9 @@ public class ProcesoReservaJpaEntity {
     @Column(name = "usuario_id", nullable = false)
     private Long usuarioId;
 
+    @Column(name = "external_patient_id", nullable = false)
+    private String externalPatientId;
+
     @Column(name = "professional_id", nullable = false)
     private Long professionalId;
 
