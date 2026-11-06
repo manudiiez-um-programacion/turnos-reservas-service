@@ -1,5 +1,9 @@
 package ar.edu.um.turnos.reservas.infrastructure.persistence.repository;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.Collection;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -12,5 +16,9 @@ public interface ProcesoReservaJpaRepository
     Optional<ProcesoReservaJpaEntity> findByReservationProcessId(String reservationProcessId);
 
     Optional<ProcesoReservaJpaEntity> findByHoldId(String holdId);
+
+    Optional<ProcesoReservaJpaEntity> findFirstByUsuarioIdAndProfessionalIdAndFechaAndHoraInicioAndEstadoNotInAndExpiresAtAfter(
+            Long usuarioId, Long professionalId, LocalDate fecha, LocalTime horaInicio,
+            Collection<String> estadosExcluidos, Instant ahora);
 
 }

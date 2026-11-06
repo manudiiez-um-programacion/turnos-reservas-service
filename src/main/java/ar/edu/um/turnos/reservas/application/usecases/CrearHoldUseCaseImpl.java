@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
 
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
@@ -29,10 +30,14 @@ import lombok.extern.slf4j.Slf4j;
  * existente, y {@code HOLD_CREADO} es el estado inicial del proceso, no el
  * destino de una transicion.
  *
- * <p>No reintenta ante un timeout de la catedra (§18.4): repetir sin
- * reconciliar antes por {@code holdId}/{@code reservationProcessId} podria
- * duplicar el efecto. Esa reconciliacion es responsabilidad de #36, todavia
- * sin implementar; por ahora un timeout simplemente se propaga.
+ * <p>No reintenta ante un timeout de la catedra (§18.4): todavia no existe
+ * {@code holdId}/{@code reservationProcessId} para reconciliar contra la
+ * catedra, así que un timeout de este POST simplemente se propaga. La
+ * reconciliacion que #36 agrega aquí es local y previa a la llamada: si ya
+ * hay un proceso vigente (no final, no vencido) para el mismo profesional,
+ * fecha, hora y usuario —por ejemplo porque la respuesta del primer intento
+ * se perdio pero igual se persistio, y el cliente reintento todo el
+ * request— se devuelve ese proceso en vez de pedir un segundo hold.
  */
 @Slf4j
 @Component
@@ -49,6 +54,15 @@ public class CrearHoldUseCaseImpl implements CrearHoldUseCase {
         // entrada, como todos los mappers del proyecto): este chequeo evita
         // que ese null llegue sin control al resto del metodo.
         Objects.requireNonNull(solicitud, "la solicitud de hold no puede ser null");
+
+        Optional<ProcesoReserva> vigente = procesoReservaRepositoryPort.buscarVigentePorSlot(
+                solicitud.usuarioId(), solicitud.professionalId(), solicitud.fecha(), solicitud.horaInicio(), Instant.now());
+        if (vigente.isPresent()) {
+            log.info("Ya existe el proceso vigente {} para el profesional {} el {} {} del usuario {}: se reutiliza en vez de crear un hold nuevo",
+                    vigente.get().getReservationProcessId(), solicitud.professionalId(), solicitud.fecha(),
+                    solicitud.horaInicio(), solicitud.usuarioId());
+            return vigente.get();
+        }
 
         ProfesionalParaHold profesional = validarSlotCatalogoPort.validar(
                 solicitud.professionalId(), solicitud.fecha(), solicitud.horaInicio());

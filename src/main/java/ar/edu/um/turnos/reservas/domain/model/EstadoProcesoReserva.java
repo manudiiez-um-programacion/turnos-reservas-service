@@ -4,6 +4,7 @@ import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Estados del proceso de reserva local (#26, §4.2 y §10 del enunciado: la
@@ -84,6 +85,15 @@ public enum EstadoProcesoReserva {
 
     public boolean esFinal() {
         return ESTADOS_FINALES.contains(this);
+    }
+
+    /**
+     * Nombres de los estados finales, para consultas de persistencia que
+     * necesitan excluirlos (#36: un proceso vigente para un slot es uno que
+     * todavia no llego a un estado final).
+     */
+    public static Set<String> nombresFinales() {
+        return ESTADOS_FINALES.stream().map(Enum::name).collect(Collectors.toUnmodifiableSet());
     }
 
     /**

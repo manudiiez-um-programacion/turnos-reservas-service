@@ -1,11 +1,15 @@
 package ar.edu.um.turnos.reservas.infrastructure.persistence.adapter;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
+import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.FiltroReservasUsuario;
 import ar.edu.um.turnos.reservas.domain.model.PaginaProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
@@ -47,6 +51,15 @@ public class ProcesoReservaRepositoryAdapter implements ProcesoReservaRepository
         Page<ProcesoReservaJpaEntity> pagina =
                 procesoReservaJpaRepository.findAll(ProcesoReservaSpecifications.deFiltro(filtro), pageable);
         return new PaginaProcesoReserva(pagina.map(mapper::toDomain).getContent(), pagina.getTotalElements());
+    }
+
+    @Override
+    public Optional<ProcesoReserva> buscarVigentePorSlot(
+            Long usuarioId, Long professionalId, LocalDate fecha, LocalTime horaInicio, Instant ahora) {
+        return procesoReservaJpaRepository
+                .findFirstByUsuarioIdAndProfessionalIdAndFechaAndHoraInicioAndEstadoNotInAndExpiresAtAfter(
+                        usuarioId, professionalId, fecha, horaInicio, EstadoProcesoReserva.nombresFinales(), ahora)
+                .map(mapper::toDomain);
     }
 
 }

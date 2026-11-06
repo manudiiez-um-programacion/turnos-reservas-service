@@ -64,6 +64,7 @@ public class ReservaWebMapper {
         return SolicitudCancelacionReserva.builder()
                 .reservationProcessId(reservationProcessId)
                 .usuarioId(usuario.getId())
+                .externalPatientId(usuario.getExternalPatientId())
                 .reason(request == null ? null : request.reason())
                 .build();
     }

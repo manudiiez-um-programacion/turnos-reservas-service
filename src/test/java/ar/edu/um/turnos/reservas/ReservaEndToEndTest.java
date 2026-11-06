@@ -16,6 +16,8 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
@@ -136,6 +138,9 @@ class ReservaEndToEndTest {
     @MockitoBean
     private AuthService authService;
 
+    @Autowired
+    private FakeProcesoReservaRepositoryPort procesoReservaRepositoryPort;
+
     private KafkaTemplate<String, String> productorDePrueba;
     // Estatico y no de instancia: JUnit crea una instancia de la clase por cada @Test, pero la
     // deduplicacion por eventId (FakeRegistrarEventoProcesadoPort) es un bean de Spring compartido
@@ -211,6 +216,12 @@ class ReservaEndToEndTest {
 
     @BeforeEach
     void prepararUsuariosYProductor() {
+        // Bean singleton compartido por toda la clase (ver el comentario de contadorEventos):
+        // sin esto, el guardia de #36 contra un segundo hold (buscarVigentePorSlot) encontraria
+        // el proceso no final que deja la prueba anterior para el mismo profesional/fecha/hora/
+        // usuario y lo devolveria en vez de dejar que crearHold() pida uno nuevo.
+        procesoReservaRepositoryPort.limpiar();
+
         when(authService.obtenerPorLogin("usuario.propietario")).thenReturn(Usuario.builder()
                 .id(7L).login("usuario.propietario").externalPatientId("ext-7").build());
         when(authService.obtenerPorLogin("usuario.ajeno")).thenReturn(Usuario.builder()
@@ -325,6 +336,24 @@ class ReservaEndToEndTest {
                     .limit(filtro.tamanio())
                     .toList();
             return new PaginaProcesoReserva(pagina, coincidentes.size());
+        }
+
+        @Override
+        public Optional<ProcesoReserva> buscarVigentePorSlot(
+                Long usuarioId, Long professionalId, LocalDate fecha, LocalTime horaInicio, Instant ahora) {
+            return porHoldId.values().stream()
+                    .filter(proceso -> proceso.getUsuarioId().equals(usuarioId))
+                    .filter(proceso -> proceso.getProfessionalId().equals(professionalId))
+                    .filter(proceso -> proceso.getFecha().equals(fecha))
+                    .filter(proceso -> proceso.getHoraInicio().equals(horaInicio))
+                    .filter(proceso -> !proceso.getEstado().esFinal())
+                    .filter(proceso -> proceso.getExpiresAt() == null || proceso.getExpiresAt().isAfter(ahora))
+                    .findFirst();
+        }
+
+        void limpiar() {
+            porReservationProcessId.clear();
+            porHoldId.clear();
         }
 
     }
