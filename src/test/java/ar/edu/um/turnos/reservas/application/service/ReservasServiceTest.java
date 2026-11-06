@@ -21,6 +21,7 @@ import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudEnvioTelefono;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
 import ar.edu.um.turnos.reservas.domain.ports.in.CancelarReservaUseCase;
+import ar.edu.um.turnos.reservas.domain.ports.in.CerrarProcesosVencidosUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConfirmarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarReservasUseCase;
@@ -60,10 +61,13 @@ class ReservasServiceTest {
     @Mock
     private RecuperarProcesosPendientesUseCase recuperarProcesosPendientesUseCase;
 
+    @Mock
+    private CerrarProcesosVencidosUseCase cerrarProcesosVencidosUseCase;
+
     private ReservasService crearService() {
         return new ReservasService(procesarEventoAccionUseCase, transicionarProcesoReservaUseCase, crearHoldUseCase,
                 confirmarHoldUseCase, consultarHoldUseCase, enviarTelefonoUseCase, consultarReservasUseCase,
-                cancelarReservaUseCase, recuperarProcesosPendientesUseCase);
+                cancelarReservaUseCase, recuperarProcesosPendientesUseCase, cerrarProcesosVencidosUseCase);
     }
 
     @Test
@@ -154,6 +158,14 @@ class ReservasServiceTest {
         service.recuperarProcesosPendientes();
 
         verify(recuperarProcesosPendientesUseCase).recuperar();
+    }
+
+    @Test
+    void delegaEnElCasoDeUsoDeCerrarProcesosVencidos() {
+        ReservasService service = crearService();
+        when(cerrarProcesosVencidosUseCase.cerrarVencidos()).thenReturn(3);
+
+        assertThat(service.cerrarProcesosVencidos()).isEqualTo(3);
     }
 
 }

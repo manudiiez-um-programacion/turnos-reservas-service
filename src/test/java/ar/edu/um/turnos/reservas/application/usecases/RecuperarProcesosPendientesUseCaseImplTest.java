@@ -24,9 +24,16 @@ import ar.edu.um.turnos.config.catedra.exception.CatedraServerErrorException;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ReservaCatedraEncontrada;
+import ar.edu.um.turnos.reservas.domain.ports.in.CerrarProcesosVencidosUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.out.ConsultarReservaCatedraPort;
 import ar.edu.um.turnos.reservas.domain.ports.out.ProcesoReservaRepositoryPort;
 
+/**
+ * El cierre de vencidos en si (#38) se cubre en
+ * {@code CerrarProcesosVencidosUseCaseImplTest}; aca se mockea
+ * {@link CerrarProcesosVencidosUseCase} para probar solo la decision propia
+ * de #37: que hacer con lo que queda vigente despues de ese cierre.
+ */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("RecuperarProcesosPendientesUseCaseImpl")
 class RecuperarProcesosPendientesUseCaseImplTest {
@@ -37,6 +44,9 @@ class RecuperarProcesosPendientesUseCaseImplTest {
     @Mock
     private ConsultarReservaCatedraPort consultarReservaCatedraPort;
 
+    @Mock
+    private CerrarProcesosVencidosUseCase cerrarProcesosVencidosUseCase;
+
     private final TransicionarProcesoReservaUseCaseImpl transicionarProcesoReservaUseCase =
             new TransicionarProcesoReservaUseCaseImpl();
 
@@ -45,10 +55,11 @@ class RecuperarProcesosPendientesUseCaseImplTest {
     @BeforeEach
     void setUp() {
         useCase = new RecuperarProcesosPendientesUseCaseImpl(
-                procesoReservaRepositoryPort, consultarReservaCatedraPort, transicionarProcesoReservaUseCase);
+                procesoReservaRepositoryPort, consultarReservaCatedraPort,
+                transicionarProcesoReservaUseCase, cerrarProcesosVencidosUseCase);
     }
 
-    private ProcesoReserva procesoDePrueba(String reservationProcessId, EstadoProcesoReserva estado, Instant expiresAt) {
+    private ProcesoReserva procesoDePrueba(String reservationProcessId, EstadoProcesoReserva estado) {
         return ProcesoReserva.builder()
                 .holdId("hold-" + reservationProcessId)
                 .reservationProcessId(reservationProcessId)
@@ -58,33 +69,30 @@ class RecuperarProcesosPendientesUseCaseImplTest {
                 .fecha(LocalDate.of(2026, 9, 14))
                 .horaInicio(LocalTime.of(9, 30))
                 .estado(estado)
-                .expiresAt(expiresAt)
+                .expiresAt(Instant.now().plusSeconds(600))
                 .build();
     }
 
     @Test
-    @DisplayName("un proceso con expiresAt ya pasado se cierra como VENCIDA sin llamar a la catedra")
-    void procesoVencidoSeCierraSinLlamarALaCatedra() {
-        ProcesoReserva proceso = procesoDePrueba(
-                "process-1", EstadoProcesoReserva.ESPERANDO_TELEFONO, Instant.parse("2026-09-10T00:00:00Z"));
-        when(procesoReservaRepositoryPort.listarNoFinales()).thenReturn(List.of(proceso));
-        when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+    @DisplayName("al arrancar, primero delega el cierre de vencidos en CerrarProcesosVencidosUseCase")
+    void delegaElCierreDeVencidosAntesDeRevisarLoVigente() {
+        when(cerrarProcesosVencidosUseCase.cerrarVencidos()).thenReturn(2);
+        when(procesoReservaRepositoryPort.listarNoFinales()).thenReturn(List.of());
 
         useCase.recuperar();
 
-        assertThat(proceso.getEstado()).isEqualTo(EstadoProcesoReserva.VENCIDA);
-        verify(consultarReservaCatedraPort, never()).buscarPorReservationProcessId(any(), any());
+        verify(cerrarProcesosVencidosUseCase).cerrarVencidos();
     }
 
     @Test
     @DisplayName("HOLD_CREADO, ESPERANDO_TELEFONO, TELEFONO_ENVIADO y TELEFONO_RECHAZADO vigentes siguen esperando sin tocarse")
     void procesosVigentesEnEsperaNoSeTocan() {
-        Instant vigente = Instant.now().plusSeconds(600);
+        when(cerrarProcesosVencidosUseCase.cerrarVencidos()).thenReturn(0);
         List<ProcesoReserva> procesos = List.of(
-                procesoDePrueba("process-hold", EstadoProcesoReserva.HOLD_CREADO, vigente),
-                procesoDePrueba("process-espera", EstadoProcesoReserva.ESPERANDO_TELEFONO, vigente),
-                procesoDePrueba("process-enviado", EstadoProcesoReserva.TELEFONO_ENVIADO, vigente),
-                procesoDePrueba("process-rechazado", EstadoProcesoReserva.TELEFONO_RECHAZADO, vigente));
+                procesoDePrueba("process-hold", EstadoProcesoReserva.HOLD_CREADO),
+                procesoDePrueba("process-espera", EstadoProcesoReserva.ESPERANDO_TELEFONO),
+                procesoDePrueba("process-enviado", EstadoProcesoReserva.TELEFONO_ENVIADO),
+                procesoDePrueba("process-rechazado", EstadoProcesoReserva.TELEFONO_RECHAZADO));
         when(procesoReservaRepositoryPort.listarNoFinales()).thenReturn(procesos);
 
         useCase.recuperar();
@@ -99,8 +107,8 @@ class RecuperarProcesosPendientesUseCaseImplTest {
     @Test
     @DisplayName("CONFIRMACION_INICIAL_ENVIADA vigente: si la catedra ya la tiene, se alinea a ESPERANDO_TELEFONO")
     void confirmacionInicialEnviadaSeAlineaSiLaCatedraYaLaTiene() {
-        ProcesoReserva proceso = procesoDePrueba(
-                "process-1", EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA, Instant.now().plusSeconds(600));
+        when(cerrarProcesosVencidosUseCase.cerrarVencidos()).thenReturn(0);
+        ProcesoReserva proceso = procesoDePrueba("process-1", EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA);
         when(procesoReservaRepositoryPort.listarNoFinales()).thenReturn(List.of(proceso));
         when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
         when(consultarReservaCatedraPort.buscarPorReservationProcessId("user-42", "process-1"))
@@ -114,8 +122,8 @@ class RecuperarProcesosPendientesUseCaseImplTest {
     @Test
     @DisplayName("CONFIRMACION_INICIAL_ENVIADA vigente: si la catedra todavia no la tiene, sigue esperando sin reintentar")
     void confirmacionInicialEnviadaSigueEsperandoSiLaCatedraNoLaTieneTodavia() {
-        ProcesoReserva proceso = procesoDePrueba(
-                "process-1", EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA, Instant.now().plusSeconds(600));
+        when(cerrarProcesosVencidosUseCase.cerrarVencidos()).thenReturn(0);
+        ProcesoReserva proceso = procesoDePrueba("process-1", EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA);
         when(procesoReservaRepositoryPort.listarNoFinales()).thenReturn(List.of(proceso));
         when(consultarReservaCatedraPort.buscarPorReservationProcessId("user-42", "process-1"))
                 .thenReturn(Optional.empty());
@@ -129,8 +137,8 @@ class RecuperarProcesosPendientesUseCaseImplTest {
     @Test
     @DisplayName("CONFIRMACION_INICIAL_ENVIADA vigente: si la catedra no responde, no rompe la recuperacion")
     void confirmacionInicialEnviadaNoRompeLaRecuperacionSiLaCatedraNoResponde() {
-        ProcesoReserva proceso = procesoDePrueba(
-                "process-1", EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA, Instant.now().plusSeconds(600));
+        when(cerrarProcesosVencidosUseCase.cerrarVencidos()).thenReturn(0);
+        ProcesoReserva proceso = procesoDePrueba("process-1", EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA);
         when(procesoReservaRepositoryPort.listarNoFinales()).thenReturn(List.of(proceso));
         when(consultarReservaCatedraPort.buscarPorReservationProcessId("user-42", "process-1"))
                 .thenThrow(new CatedraServerErrorException(HttpStatus.SERVICE_UNAVAILABLE, null, null, List.of()));
@@ -142,19 +150,16 @@ class RecuperarProcesosPendientesUseCaseImplTest {
     }
 
     @Test
-    @DisplayName("con varios procesos pendientes persistidos, la recuperacion deja a cada uno en un estado coherente")
-    void variosProcesosPendientesQuedanCoherentesTrasLaRecuperacion() {
-        Instant vigente = Instant.now().plusSeconds(600);
-        Instant vencido = Instant.now().minusSeconds(60);
-        ProcesoReserva holdVigente = procesoDePrueba("process-hold", EstadoProcesoReserva.HOLD_CREADO, vigente);
+    @DisplayName("con varios procesos vigentes, la recuperacion deja a cada uno en un estado coherente")
+    void variosProcesosVigentesQuedanCoherentesTrasLaRecuperacion() {
+        when(cerrarProcesosVencidosUseCase.cerrarVencidos()).thenReturn(1);
+        ProcesoReserva holdVigente = procesoDePrueba("process-hold", EstadoProcesoReserva.HOLD_CREADO);
         ProcesoReserva confirmacionReconciliable =
-                procesoDePrueba("process-reconciliable", EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA, vigente);
+                procesoDePrueba("process-reconciliable", EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA);
         ProcesoReserva confirmacionSinNovedad =
-                procesoDePrueba("process-sin-novedad", EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA, vigente);
-        ProcesoReserva esperandoTelefonoVencido =
-                procesoDePrueba("process-vencido", EstadoProcesoReserva.ESPERANDO_TELEFONO, vencido);
+                procesoDePrueba("process-sin-novedad", EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA);
         when(procesoReservaRepositoryPort.listarNoFinales()).thenReturn(
-                List.of(holdVigente, confirmacionReconciliable, confirmacionSinNovedad, esperandoTelefonoVencido));
+                List.of(holdVigente, confirmacionReconciliable, confirmacionSinNovedad));
         when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
         when(consultarReservaCatedraPort.buscarPorReservationProcessId("user-42", "process-reconciliable"))
                 .thenReturn(Optional.of(new ReservaCatedraEncontrada(null, "PHONE_PENDING", null, null)));
@@ -166,12 +171,12 @@ class RecuperarProcesosPendientesUseCaseImplTest {
         assertThat(holdVigente.getEstado()).isEqualTo(EstadoProcesoReserva.HOLD_CREADO);
         assertThat(confirmacionReconciliable.getEstado()).isEqualTo(EstadoProcesoReserva.ESPERANDO_TELEFONO);
         assertThat(confirmacionSinNovedad.getEstado()).isEqualTo(EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA);
-        assertThat(esperandoTelefonoVencido.getEstado()).isEqualTo(EstadoProcesoReserva.VENCIDA);
     }
 
     @Test
-    @DisplayName("sin procesos pendientes, la recuperacion no hace nada (arrancar dos veces no duplica efectos)")
-    void sinProcesosPendientesNoHaceNada() {
+    @DisplayName("sin procesos vigentes, la recuperacion no hace nada mas alla de delegar el cierre de vencidos")
+    void sinProcesosVigentesNoHaceNadaMas() {
+        when(cerrarProcesosVencidosUseCase.cerrarVencidos()).thenReturn(0);
         when(procesoReservaRepositoryPort.listarNoFinales()).thenReturn(List.of());
 
         useCase.recuperar();
