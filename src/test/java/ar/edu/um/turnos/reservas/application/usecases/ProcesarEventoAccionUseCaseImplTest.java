@@ -422,4 +422,100 @@ class ProcesarEventoAccionUseCaseImplTest {
         verify(procesoReservaRepositoryPort, never()).guardar(any());
     }
 
+    private EventoAccionReserva.EventoAccionReservaBuilder reservaCanceladaValida() {
+        return EventoAccionReserva.builder()
+                .eventId("cancellation-event-7d14")
+                .tipo(TipoEventoAccion.RESERVA_CANCELADA)
+                .reservationProcessId("process-a92b47d0")
+                .holdId("hold-6c0c2f41")
+                .reason("Cambio solicitado por el usuario")
+                .occurredAt(Instant.parse("2026-09-11T15:10:00Z"))
+                .schemaVersion(1);
+    }
+
+    @Test
+    @DisplayName("AppointmentCancelled (catedra primero): guarda cancelReason/cancelledAt y cierra como CANCELADA")
+    void reservaCanceladaGuardaElMotivoYElInstanteYCierraComoCancelada() {
+        EventoAccionReserva evento = reservaCanceladaValida().build();
+        ProcesoReserva proceso = procesoDePrueba().estado(EstadoProcesoReserva.CONFIRMADA).build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+        when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+
+        useCase.procesar(evento);
+
+        ArgumentCaptor<ProcesoReserva> capturado = ArgumentCaptor.forClass(ProcesoReserva.class);
+        verify(procesoReservaRepositoryPort).guardar(capturado.capture());
+        ProcesoReserva guardado = capturado.getValue();
+        assertThat(guardado.getEstado()).isEqualTo(EstadoProcesoReserva.CANCELADA);
+        assertThat(guardado.getCancelReason()).isEqualTo("Cambio solicitado por el usuario");
+        assertThat(guardado.getCancelledAt()).isEqualTo(Instant.parse("2026-09-11T15:10:00Z"));
+    }
+
+    @Test
+    @DisplayName("AppointmentCancelled admite reason null")
+    void reservaCanceladaAdmiteReasonNulo() {
+        EventoAccionReserva evento = reservaCanceladaValida().reason(null).build();
+        ProcesoReserva proceso = procesoDePrueba().estado(EstadoProcesoReserva.CONFIRMADA).build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+        when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+
+        useCase.procesar(evento);
+
+        ArgumentCaptor<ProcesoReserva> capturado = ArgumentCaptor.forClass(ProcesoReserva.class);
+        verify(procesoReservaRepositoryPort).guardar(capturado.capture());
+        assertThat(capturado.getValue().getCancelReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("AppointmentCancelled (REST primero): proceso ya CANCELADA, no vuelve a aplicarse ni pisa cancelledAt")
+    void reservaCanceladaNoSeReaplicaSiYaSeCancelaPorRest() {
+        EventoAccionReserva evento = reservaCanceladaValida().build();
+        Instant cancelledAtOriginal = Instant.parse("2026-09-11T15:09:00Z");
+        ProcesoReserva proceso = procesoDePrueba()
+                .estado(EstadoProcesoReserva.CANCELADA)
+                .cancelledAt(cancelledAtOriginal)
+                .cancelReason("Motivo original del REST")
+                .build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+
+        useCase.procesar(evento);
+
+        verify(procesoReservaRepositoryPort, never()).guardar(any());
+        assertThat(proceso.getCancelledAt()).isEqualTo(cancelledAtOriginal);
+        assertThat(proceso.getCancelReason()).isEqualTo("Motivo original del REST");
+    }
+
+    @Test
+    @DisplayName("AppointmentCancelled no reabre un proceso en otro estado final (VENCIDA)")
+    void reservaCanceladaNoReabreUnProcesoEnOtroEstadoFinal() {
+        EventoAccionReserva evento = reservaCanceladaValida().build();
+        ProcesoReserva proceso = procesoDePrueba().estado(EstadoProcesoReserva.VENCIDA).build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+
+        useCase.procesar(evento);
+
+        verify(procesoReservaRepositoryPort, never()).guardar(any());
+    }
+
+    @Test
+    @DisplayName("AppointmentCancelled se descarta sin lanzar cuando el reservationProcessId es desconocido")
+    void reservaCanceladaSeDescartaParaUnProcesoDesconocido() {
+        EventoAccionReserva evento = reservaCanceladaValida().build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(true);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.empty());
+
+        assertThatCode(() -> useCase.procesar(evento)).doesNotThrowAnyException();
+
+        verify(procesoReservaRepositoryPort, never()).guardar(any());
+    }
+
 }
