@@ -95,6 +95,12 @@ public class ProcesoReservaJpaEntity {
     @Column(name = "intentos_telefono", nullable = false)
     private int intentosTelefono;
 
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    @Column(name = "cancel_reason")
+    private String cancelReason;
+
     @Builder.Default
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "proceso_reserva_transicion", joinColumns = @JoinColumn(name = "proceso_reserva_id"))

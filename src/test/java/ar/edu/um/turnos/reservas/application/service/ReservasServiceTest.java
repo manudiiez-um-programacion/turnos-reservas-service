@@ -16,9 +16,11 @@ import ar.edu.um.turnos.reservas.domain.model.EventoAccionReserva;
 import ar.edu.um.turnos.reservas.domain.model.FiltroReservasUsuario;
 import ar.edu.um.turnos.reservas.domain.model.PaginaProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.SolicitudCancelacionReserva;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudEnvioTelefono;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
+import ar.edu.um.turnos.reservas.domain.ports.in.CancelarReservaUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConfirmarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarReservasUseCase;
@@ -51,9 +53,13 @@ class ReservasServiceTest {
     @Mock
     private ConsultarReservasUseCase consultarReservasUseCase;
 
+    @Mock
+    private CancelarReservaUseCase cancelarReservaUseCase;
+
     private ReservasService crearService() {
         return new ReservasService(procesarEventoAccionUseCase, transicionarProcesoReservaUseCase, crearHoldUseCase,
-                confirmarHoldUseCase, consultarHoldUseCase, enviarTelefonoUseCase, consultarReservasUseCase);
+                confirmarHoldUseCase, consultarHoldUseCase, enviarTelefonoUseCase, consultarReservasUseCase,
+                cancelarReservaUseCase);
     }
 
     @Test
@@ -124,6 +130,17 @@ class ReservasServiceTest {
         when(consultarReservasUseCase.consultar(filtro)).thenReturn(esperado);
 
         assertThat(service.consultarReservas(filtro)).isSameAs(esperado);
+    }
+
+    @Test
+    void delegaEnElCasoDeUsoDeCancelarReserva() {
+        ReservasService service = crearService();
+        SolicitudCancelacionReserva solicitud = SolicitudCancelacionReserva.builder()
+                .reservationProcessId("process-1").usuarioId(7L).build();
+        ProcesoReserva esperado = ProcesoReserva.builder().reservationProcessId("process-1").build();
+        when(cancelarReservaUseCase.cancelar(solicitud)).thenReturn(esperado);
+
+        assertThat(service.cancelarReserva(solicitud)).isSameAs(esperado);
     }
 
 }

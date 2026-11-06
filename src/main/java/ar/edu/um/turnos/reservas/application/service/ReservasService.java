@@ -8,9 +8,11 @@ import ar.edu.um.turnos.reservas.domain.model.EventoAccionReserva;
 import ar.edu.um.turnos.reservas.domain.model.FiltroReservasUsuario;
 import ar.edu.um.turnos.reservas.domain.model.PaginaProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.SolicitudCancelacionReserva;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudEnvioTelefono;
+import ar.edu.um.turnos.reservas.domain.ports.in.CancelarReservaUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConfirmarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarReservasUseCase;
@@ -37,6 +39,7 @@ public class ReservasService {
     private final ConsultarHoldUseCase consultarHoldUseCase;
     private final EnviarTelefonoUseCase enviarTelefonoUseCase;
     private final ConsultarReservasUseCase consultarReservasUseCase;
+    private final CancelarReservaUseCase cancelarReservaUseCase;
 
     public void procesarEventoAccion(EventoAccionReserva evento) {
         procesarEventoAccionUseCase.procesar(evento);
@@ -64,6 +67,10 @@ public class ReservasService {
 
     public PaginaProcesoReserva consultarReservas(FiltroReservasUsuario filtro) {
         return consultarReservasUseCase.consultar(filtro);
+    }
+
+    public ProcesoReserva cancelarReserva(SolicitudCancelacionReserva solicitud) {
+        return cancelarReservaUseCase.cancelar(solicitud);
     }
 
 }

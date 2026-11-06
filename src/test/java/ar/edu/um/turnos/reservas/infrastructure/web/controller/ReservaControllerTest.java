@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -22,11 +24,15 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import ar.edu.um.turnos.auth.application.service.AuthService;
 import ar.edu.um.turnos.auth.domain.model.Usuario;
+import ar.edu.um.turnos.reservas.application.exception.ProcesoReservaAjenoException;
+import ar.edu.um.turnos.reservas.application.exception.ReservaNoCancelableException;
+import ar.edu.um.turnos.reservas.application.exception.ReservaNoEncontradaException;
 import ar.edu.um.turnos.reservas.application.service.ReservasService;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.FiltroReservasUsuario;
 import ar.edu.um.turnos.reservas.domain.model.PaginaProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.SolicitudCancelacionReserva;
 import ar.edu.um.turnos.reservas.infrastructure.web.advice.ReservasExceptionHandler;
 import ar.edu.um.turnos.reservas.infrastructure.web.mapper.ReservaWebMapper;
 
@@ -110,6 +116,105 @@ class ReservaControllerTest {
         });
 
         mockMvc.perform(get("/api/reservas").principal(AUTENTICACION)).andExpect(status().isOk());
+    }
+
+    @Test
+    void cancelaUnaReservaPropiaYDevuelve200() throws Exception {
+        when(authService.obtenerPorLogin("ana.gomez"))
+                .thenReturn(Usuario.builder().id(7L).externalPatientId("user-42").build());
+        ProcesoReserva proceso = ProcesoReserva.builder()
+                .reservationProcessId("process-a92b47d0")
+                .estado(EstadoProcesoReserva.CANCELADA)
+                .cancelledAt(Instant.parse("2026-09-11T15:10:00Z"))
+                .cancelReason("Cambio solicitado por el usuario")
+                .build();
+        when(reservasService.cancelarReserva(any())).thenReturn(proceso);
+
+        mockMvc.perform(post("/api/reservas/process-a92b47d0/cancel")
+                        .principal(AUTENTICACION)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason": "Cambio solicitado por el usuario"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELADA"))
+                .andExpect(jsonPath("$.cancelReason").value("Cambio solicitado por el usuario"));
+    }
+
+    @Test
+    void cancelaUnaReservaPropiaSinCuerpoYDevuelve200() throws Exception {
+        when(authService.obtenerPorLogin("ana.gomez"))
+                .thenReturn(Usuario.builder().id(7L).externalPatientId("user-42").build());
+        ProcesoReserva proceso = ProcesoReserva.builder()
+                .reservationProcessId("process-a92b47d0")
+                .estado(EstadoProcesoReserva.CANCELADA)
+                .build();
+        when(reservasService.cancelarReserva(any())).thenReturn(proceso);
+
+        mockMvc.perform(post("/api/reservas/process-a92b47d0/cancel").principal(AUTENTICACION))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELADA"));
+    }
+
+    @Test
+    void rechazaUnReasonDemasiadoLargoCon400() throws Exception {
+        when(authService.obtenerPorLogin("ana.gomez"))
+                .thenReturn(Usuario.builder().id(7L).externalPatientId("user-42").build());
+
+        mockMvc.perform(post("/api/reservas/process-a92b47d0/cancel")
+                        .principal(AUTENTICACION)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\": \"%s\"}".formatted("x".repeat(501))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rechazaUnaReservaInexistenteCon404() throws Exception {
+        when(authService.obtenerPorLogin("ana.gomez"))
+                .thenReturn(Usuario.builder().id(7L).externalPatientId("user-42").build());
+        when(reservasService.cancelarReserva(any())).thenThrow(new ReservaNoEncontradaException("process-a92b47d0"));
+
+        mockMvc.perform(post("/api/reservas/process-a92b47d0/cancel").principal(AUTENTICACION))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESERVATION_NOT_FOUND"));
+    }
+
+    @Test
+    void rechazaCancelarLaReservaDeOtroUsuarioCon403() throws Exception {
+        when(authService.obtenerPorLogin("ana.gomez"))
+                .thenReturn(Usuario.builder().id(7L).externalPatientId("user-42").build());
+        when(reservasService.cancelarReserva(any()))
+                .thenThrow(new ProcesoReservaAjenoException("process-a92b47d0", 7L));
+
+        mockMvc.perform(post("/api/reservas/process-a92b47d0/cancel").principal(AUTENTICACION))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("RESERVATION_PROCESS_OWNER_MISMATCH"));
+    }
+
+    @Test
+    void rechazaCancelarUnaReservaNoConfirmadaCon409() throws Exception {
+        when(authService.obtenerPorLogin("ana.gomez"))
+                .thenReturn(Usuario.builder().id(7L).externalPatientId("user-42").build());
+        when(reservasService.cancelarReserva(any()))
+                .thenThrow(new ReservaNoCancelableException("process-a92b47d0"));
+
+        mockMvc.perform(post("/api/reservas/process-a92b47d0/cancel").principal(AUTENTICACION))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RESERVATION_NOT_CANCELLABLE"));
+    }
+
+    @Test
+    void nuncaCancelaLaReservaDeOtroUsuario() throws Exception {
+        Usuario usuario = Usuario.builder().id(7L).externalPatientId("user-42").build();
+        when(authService.obtenerPorLogin("ana.gomez")).thenReturn(usuario);
+        when(reservasService.cancelarReserva(any())).thenAnswer(invocation -> {
+            SolicitudCancelacionReserva solicitud = invocation.getArgument(0, SolicitudCancelacionReserva.class);
+            assertThat(solicitud.usuarioId()).isEqualTo(7L);
+            return ProcesoReserva.builder().reservationProcessId("process-a92b47d0").build();
+        });
+
+        mockMvc.perform(post("/api/reservas/process-a92b47d0/cancel").principal(AUTENTICACION))
+                .andExpect(status().isOk());
     }
 
 }

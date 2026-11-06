@@ -98,6 +98,12 @@ public class ProcesoReserva {
     @Builder.Default
     private int intentosTelefono = 0;
 
+    /** {@code cancelledAt} que informa la catedra al cancelar (#34, §12 de la referencia). */
+    private Instant cancelledAt;
+
+    /** Motivo opcional que el usuario mando al cancelar (#34, §12 de la referencia; hasta 500 caracteres). */
+    private String cancelReason;
+
     @Builder.Default
     private List<TransicionProcesoReserva> historial = new ArrayList<>();
 

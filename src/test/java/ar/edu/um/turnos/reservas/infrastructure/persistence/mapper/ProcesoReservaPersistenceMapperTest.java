@@ -40,6 +40,8 @@ class ProcesoReservaPersistenceMapperTest {
                 .reason("INVALID_PHONE_NUMBER")
                 .reasonMessage("El telefono ingresado no es valido.")
                 .intentosTelefono(2)
+                .cancelledAt(Instant.parse("2026-09-11T15:10:00Z"))
+                .cancelReason("Cambio solicitado por el usuario")
                 .historial(List.of(new TransicionProcesoReserva(
                         EstadoProcesoReserva.HOLD_CREADO, Instant.parse("2026-09-10T14:35:00Z"))))
                 .build();
@@ -69,6 +71,8 @@ class ProcesoReservaPersistenceMapperTest {
         assertThat(entity.getReason()).isEqualTo("INVALID_PHONE_NUMBER");
         assertThat(entity.getReasonMessage()).isEqualTo("El telefono ingresado no es valido.");
         assertThat(entity.getIntentosTelefono()).isEqualTo(2);
+        assertThat(entity.getCancelledAt()).isEqualTo(Instant.parse("2026-09-11T15:10:00Z"));
+        assertThat(entity.getCancelReason()).isEqualTo("Cambio solicitado por el usuario");
         assertThat(entity.getHistorial()).hasSize(1);
         assertThat(entity.getHistorial().get(0).getEstado()).isEqualTo("HOLD_CREADO");
         assertThat(entity.getHistorial().get(0).getOcurridoEn()).isEqualTo(Instant.parse("2026-09-10T14:35:00Z"));
@@ -96,6 +100,8 @@ class ProcesoReservaPersistenceMapperTest {
         assertThat(resultado.getReason()).isEqualTo(original.getReason());
         assertThat(resultado.getReasonMessage()).isEqualTo(original.getReasonMessage());
         assertThat(resultado.getIntentosTelefono()).isEqualTo(original.getIntentosTelefono());
+        assertThat(resultado.getCancelledAt()).isEqualTo(original.getCancelledAt());
+        assertThat(resultado.getCancelReason()).isEqualTo(original.getCancelReason());
         assertThat(resultado.getHistorial()).isEqualTo(original.getHistorial());
     }
 
