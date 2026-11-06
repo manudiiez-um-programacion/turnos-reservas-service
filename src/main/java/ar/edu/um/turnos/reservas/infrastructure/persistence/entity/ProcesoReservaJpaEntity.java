@@ -74,8 +74,26 @@ public class ProcesoReservaJpaEntity {
     @Column(name = "request_event_id")
     private String requestEventId;
 
+    @Column(name = "request_required_field")
+    private String requestRequiredField;
+
+    @Column(name = "request_message")
+    private String requestMessage;
+
+    @Column(name = "telefono")
+    private String telefono;
+
     @Column(name = "reservation_id")
     private Long reservationId;
+
+    @Column(name = "reason")
+    private String reason;
+
+    @Column(name = "reason_message")
+    private String reasonMessage;
+
+    @Column(name = "intentos_telefono", nullable = false)
+    private int intentosTelefono;
 
     @Builder.Default
     @ElementCollection(fetch = FetchType.EAGER)

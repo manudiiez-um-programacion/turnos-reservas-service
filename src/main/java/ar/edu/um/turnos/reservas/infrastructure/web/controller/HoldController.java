@@ -3,6 +3,7 @@ package ar.edu.um.turnos.reservas.infrastructure.web.controller;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,6 +17,7 @@ import ar.edu.um.turnos.reservas.application.service.ReservasService;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.ConfirmarHoldRequest;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.CrearHoldRequest;
+import ar.edu.um.turnos.reservas.infrastructure.web.dto.EnviarTelefonoRequest;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.HoldResponse;
 import ar.edu.um.turnos.reservas.infrastructure.web.mapper.HoldWebMapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -57,6 +59,26 @@ public class HoldController {
         Usuario usuario = authService.obtenerPorLogin(authentication.getName());
         ProcesoReserva proceso =
                 reservasService.confirmarHold(holdWebMapper.toSolicitudConfirmacion(holdId, request, usuario));
+        return holdWebMapper.toResponse(proceso);
+    }
+
+    @PostMapping("/{holdId}/phone")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @Operation(summary = "Enviar el telefono del usuario para un proceso que lo esta esperando")
+    public HoldResponse enviarTelefono(
+            @PathVariable String holdId, @Valid @RequestBody EnviarTelefonoRequest request, Authentication authentication) {
+        Usuario usuario = authService.obtenerPorLogin(authentication.getName());
+        ProcesoReserva proceso =
+                reservasService.enviarTelefono(holdWebMapper.toSolicitudEnvioTelefono(holdId, request, usuario));
+        return holdWebMapper.toResponse(proceso);
+    }
+
+    @GetMapping("/{holdId}")
+    @ResponseStatus(HttpStatus.OK)
+    @Operation(summary = "Consultar el estado local del proceso de reserva de un hold")
+    public HoldResponse consultar(@PathVariable String holdId, Authentication authentication) {
+        Usuario usuario = authService.obtenerPorLogin(authentication.getName());
+        ProcesoReserva proceso = reservasService.consultarHold(holdId, usuario.getId());
         return holdWebMapper.toResponse(proceso);
     }
 

@@ -31,7 +31,13 @@ public class ProcesoReservaPersistenceMapper {
                 .estado(proceso.getEstado() == null ? null : proceso.getEstado().name())
                 .expiresAt(proceso.getExpiresAt())
                 .requestEventId(proceso.getRequestEventId())
+                .requestRequiredField(proceso.getRequestRequiredField())
+                .requestMessage(proceso.getRequestMessage())
+                .telefono(proceso.getTelefono())
                 .reservationId(proceso.getReservationId())
+                .reason(proceso.getReason())
+                .reasonMessage(proceso.getReasonMessage())
+                .intentosTelefono(proceso.getIntentosTelefono())
                 .historial(toHistorialEmbeddable(proceso.getHistorial()))
                 .build();
     }
@@ -53,7 +59,13 @@ public class ProcesoReservaPersistenceMapper {
                 .estado(entity.getEstado() == null ? null : EstadoProcesoReserva.valueOf(entity.getEstado()))
                 .expiresAt(entity.getExpiresAt())
                 .requestEventId(entity.getRequestEventId())
+                .requestRequiredField(entity.getRequestRequiredField())
+                .requestMessage(entity.getRequestMessage())
+                .telefono(entity.getTelefono())
                 .reservationId(entity.getReservationId())
+                .reason(entity.getReason())
+                .reasonMessage(entity.getReasonMessage())
+                .intentosTelefono(entity.getIntentosTelefono())
                 .historial(toHistorialDomain(entity.getHistorial()))
                 .build();
     }
