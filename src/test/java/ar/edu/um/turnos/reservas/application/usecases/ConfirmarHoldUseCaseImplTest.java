@@ -4,13 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Optional;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.ResourceAccessException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import ar.edu.um.turnos.config.catedra.exception.CatedraServerErrorException;
 import ar.edu.um.turnos.reservas.application.exception.ExternalPatientMismatchException;
 import ar.edu.um.turnos.reservas.application.exception.HoldNoEncontradoException;
 import ar.edu.um.turnos.reservas.application.exception.HoldOwnerMismatchException;
@@ -29,8 +34,10 @@ import ar.edu.um.turnos.reservas.application.exception.TransicionProcesoReservaI
 import ar.edu.um.turnos.reservas.domain.model.ConfirmacionHoldCatedra;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.ReservaCatedraEncontrada;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.ports.out.ConfirmarHoldCatedraPort;
+import ar.edu.um.turnos.reservas.domain.ports.out.ConsultarReservaCatedraPort;
 import ar.edu.um.turnos.reservas.domain.ports.out.ProcesoReservaRepositoryPort;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,6 +49,9 @@ class ConfirmarHoldUseCaseImplTest {
 
     @Mock
     private ConfirmarHoldCatedraPort confirmarHoldCatedraPort;
+
+    @Mock
+    private ConsultarReservaCatedraPort consultarReservaCatedraPort;
 
     private final TransicionarProcesoReservaUseCaseImpl transicionarProcesoReservaUseCase =
             new TransicionarProcesoReservaUseCaseImpl();
@@ -59,7 +69,7 @@ class ConfirmarHoldUseCaseImplTest {
     @BeforeEach
     void setUp() {
         useCase = new ConfirmarHoldUseCaseImpl(
-                procesoReservaRepositoryPort, confirmarHoldCatedraPort, transicionarProcesoReservaUseCase);
+                procesoReservaRepositoryPort, confirmarHoldCatedraPort, consultarReservaCatedraPort, transicionarProcesoReservaUseCase);
     }
 
     private ProcesoReserva procesoDePrueba(EstadoProcesoReserva estado) {
@@ -208,6 +218,58 @@ class ConfirmarHoldUseCaseImplTest {
                 .isInstanceOf(TransicionProcesoReservaInvalidaException.class);
 
         verify(confirmarHoldCatedraPort, never()).confirmar(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("timeout confirmando: si la catedra ya tenia la reserva, se alinea sin reintentar")
+    void timeoutConfirmandoLaCatedraYaLaTeniaAplicada() {
+        ProcesoReserva proceso = procesoDePrueba(EstadoProcesoReserva.HOLD_CREADO);
+        when(procesoReservaRepositoryPort.buscarPorHoldId("hold-6c0c2f41")).thenReturn(Optional.of(proceso));
+        when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+        when(confirmarHoldCatedraPort.confirmar(proceso, "user-42", "Juan", "Perez"))
+                .thenThrow(new ResourceAccessException("timeout de lectura"));
+        when(consultarReservaCatedraPort.buscarPorReservationProcessId("user-42", "process-a92b47d0"))
+                .thenReturn(Optional.of(new ReservaCatedraEncontrada(null, "PHONE_PENDING", null, null)));
+
+        ProcesoReserva resultado = useCase.confirmar(solicitud);
+
+        assertThat(resultado.getEstado()).isEqualTo(EstadoProcesoReserva.ESPERANDO_TELEFONO);
+        verify(confirmarHoldCatedraPort, times(1)).confirmar(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("timeout confirmando + RESERVATION_PROCESS_ALREADY_CONFIRMED en el reintento: el proceso queda confirmado una sola vez")
+    void timeoutConfirmandoYReintentoYaConfirmado() {
+        ProcesoReserva proceso = procesoDePrueba(EstadoProcesoReserva.HOLD_CREADO);
+        when(procesoReservaRepositoryPort.buscarPorHoldId("hold-6c0c2f41")).thenReturn(Optional.of(proceso));
+        when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+        when(confirmarHoldCatedraPort.confirmar(proceso, "user-42", "Juan", "Perez"))
+                .thenThrow(new CatedraServerErrorException(HttpStatus.SERVICE_UNAVAILABLE, null, null, List.of()))
+                .thenThrow(new HoldYaConfirmadoException("hold-6c0c2f41", null));
+        when(consultarReservaCatedraPort.buscarPorReservationProcessId("user-42", "process-a92b47d0"))
+                .thenReturn(Optional.empty());
+
+        ProcesoReserva resultado = useCase.confirmar(solicitud);
+
+        assertThat(resultado.getEstado()).isEqualTo(EstadoProcesoReserva.ESPERANDO_TELEFONO);
+        verify(confirmarHoldCatedraPort, times(2)).confirmar(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("timeout confirmando y el reintento tambien da timeout: se propaga sin insistir mas")
+    void timeoutConfirmandoYElReintentoTambienDaTimeout() {
+        ProcesoReserva proceso = procesoDePrueba(EstadoProcesoReserva.HOLD_CREADO);
+        when(procesoReservaRepositoryPort.buscarPorHoldId("hold-6c0c2f41")).thenReturn(Optional.of(proceso));
+        when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+        when(confirmarHoldCatedraPort.confirmar(proceso, "user-42", "Juan", "Perez"))
+                .thenThrow(new ResourceAccessException("timeout 1"))
+                .thenThrow(new ResourceAccessException("timeout 2"));
+        when(consultarReservaCatedraPort.buscarPorReservationProcessId("user-42", "process-a92b47d0"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.confirmar(solicitud)).isInstanceOf(ResourceAccessException.class);
+
+        verify(confirmarHoldCatedraPort, times(2)).confirmar(any(), any(), any(), any());
     }
 
 }

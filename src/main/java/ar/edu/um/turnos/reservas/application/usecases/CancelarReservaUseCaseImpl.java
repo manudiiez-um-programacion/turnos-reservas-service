@@ -2,8 +2,11 @@ package ar.edu.um.turnos.reservas.application.usecases;
 
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 
+import ar.edu.um.turnos.config.catedra.exception.CatedraServerErrorException;
 import ar.edu.um.turnos.reservas.application.exception.ProcesoReservaAjenoException;
 import ar.edu.um.turnos.reservas.application.exception.ReservaNoCancelableException;
 import ar.edu.um.turnos.reservas.application.exception.ReservaNoEncontradaException;
@@ -11,10 +14,12 @@ import ar.edu.um.turnos.reservas.application.exception.ReservaOwnerMismatchExcep
 import ar.edu.um.turnos.reservas.domain.model.CancelacionReservaCatedra;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.ReservaCatedraEncontrada;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudCancelacionReserva;
 import ar.edu.um.turnos.reservas.domain.ports.in.CancelarReservaUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.TransicionarProcesoReservaUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.out.CancelarReservaCatedraPort;
+import ar.edu.um.turnos.reservas.domain.ports.out.ConsultarReservaCatedraPort;
 import ar.edu.um.turnos.reservas.domain.ports.out.ProcesoReservaRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,21 +39,31 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p>El estado local recien pasa a {@code CANCELADA} despues de que la
  * catedra confirma la cancelacion: un timeout no prueba que la operacion
- * haya fallado (§18.4), asi que no se cierra el proceso a ciegas. La
- * reconciliacion de esos timeouts queda para #36.
+ * haya fallado (§18.4), asi que no se cierra el proceso a ciegas.
  *
  * <p>{@code ReservaNoEncontradaException} y {@code ReservaOwnerMismatchException}
  * que llegan de la catedra, y un {@code ReservaNoCancelableException} propio
  * de la catedra (su estado ya no es cancelable), son inconsistencias: se
  * registran y se propagan sin tocar el estado local.
+ *
+ * <p>Un timeout o un error de infraestructura se reconcilia antes de repetir
+ * la llamada (#36, §18.4): se busca el {@code reservationProcessId} en
+ * {@code GET /api/appointments}. Como el proceso ya esta {@code CONFIRMADA}
+ * para llegar hasta aca, la reserva en la catedra existe seguro; lo que hay
+ * que decidir es si su {@code status} ya quedo {@code CANCELLED} (se alinea
+ * el estado local con lo que informa la catedra, sin repetir la llamada) o
+ * todavia no (se permite exactamente un reintento acotado).
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class CancelarReservaUseCaseImpl implements CancelarReservaUseCase {
 
+    private static final String STATUS_CANCELADA_EN_CATEDRA = "CANCELLED";
+
     private final ProcesoReservaRepositoryPort procesoReservaRepositoryPort;
     private final CancelarReservaCatedraPort cancelarReservaCatedraPort;
+    private final ConsultarReservaCatedraPort consultarReservaCatedraPort;
     private final TransicionarProcesoReservaUseCase transicionarProcesoReservaUseCase;
 
     @Override
@@ -71,6 +86,10 @@ public class CancelarReservaUseCaseImpl implements CancelarReservaUseCase {
             throw new ReservaNoCancelableException(solicitud.reservationProcessId());
         }
 
+        return intentarCancelar(proceso, solicitud, true);
+    }
+
+    private ProcesoReserva intentarCancelar(ProcesoReserva proceso, SolicitudCancelacionReserva solicitud, boolean permitirReconciliacion) {
         try {
             CancelacionReservaCatedra resultado = cancelarReservaCatedraPort.cancelar(proceso, solicitud.reason());
             proceso.setCancelledAt(resultado.cancelledAt());
@@ -83,6 +102,42 @@ public class CancelarReservaUseCaseImpl implements CancelarReservaUseCase {
         } catch (ReservaNoEncontradaException | ReservaOwnerMismatchException | ReservaNoCancelableException inconsistencia) {
             log.warn("Inconsistencia cancelando la reserva {}: {}", solicitud.reservationProcessId(), inconsistencia.getMessage());
             throw inconsistencia;
+        } catch (CatedraServerErrorException | ResourceAccessException timeout) {
+            if (!permitirReconciliacion) {
+                log.warn("Reintento de la cancelacion de la reserva {} agotado tras reconciliar: {}",
+                        solicitud.reservationProcessId(), timeout.getMessage());
+                throw timeout;
+            }
+            return reconciliarYReintentarCancelacion(proceso, solicitud, timeout);
+        }
+    }
+
+    private ProcesoReserva reconciliarYReintentarCancelacion(
+            ProcesoReserva proceso, SolicitudCancelacionReserva solicitud, RuntimeException timeout) {
+        log.warn("Timeout o error de infraestructura cancelando la reserva {}: se reconcilia antes de reintentar ({})",
+                solicitud.reservationProcessId(), timeout.getMessage());
+
+        Optional<ReservaCatedraEncontrada> encontrada = buscarEnLaCatedra(solicitud.externalPatientId(), solicitud.reservationProcessId());
+        if (encontrada.isPresent() && STATUS_CANCELADA_EN_CATEDRA.equals(encontrada.get().status())) {
+            ReservaCatedraEncontrada reserva = encontrada.get();
+            log.info("La catedra ya tenia cancelada la reserva {}: se alinea el estado local sin repetir la llamada",
+                    solicitud.reservationProcessId());
+            proceso.setCancelledAt(reserva.cancelledAt());
+            proceso.setCancelReason(reserva.cancellationReason() != null ? reserva.cancellationReason() : solicitud.reason());
+            proceso = transicionarProcesoReservaUseCase.transicionar(proceso, EstadoProcesoReserva.CANCELADA, Instant.now());
+            return procesoReservaRepositoryPort.guardar(proceso);
+        }
+
+        log.info("La catedra todavia no tiene cancelada la reserva {}: se reintenta una vez, acotado", solicitud.reservationProcessId());
+        return intentarCancelar(proceso, solicitud, false);
+    }
+
+    private Optional<ReservaCatedraEncontrada> buscarEnLaCatedra(String externalPatientId, String reservationProcessId) {
+        try {
+            return consultarReservaCatedraPort.buscarPorReservationProcessId(externalPatientId, reservationProcessId);
+        } catch (CatedraServerErrorException | ResourceAccessException fallo) {
+            log.warn("No se pudo reconciliar la reserva {} contra la catedra: {}", reservationProcessId, fallo.getMessage());
+            return Optional.empty();
         }
     }
 
