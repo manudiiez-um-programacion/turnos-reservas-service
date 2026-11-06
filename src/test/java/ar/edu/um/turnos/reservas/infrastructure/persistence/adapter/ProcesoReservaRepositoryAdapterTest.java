@@ -1,17 +1,26 @@
 package ar.edu.um.turnos.reservas.infrastructure.persistence.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.FiltroReservasUsuario;
+import ar.edu.um.turnos.reservas.domain.model.PaginaProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 import ar.edu.um.turnos.reservas.infrastructure.persistence.entity.ProcesoReservaJpaEntity;
 import ar.edu.um.turnos.reservas.infrastructure.persistence.mapper.ProcesoReservaPersistenceMapper;
@@ -72,6 +81,23 @@ class ProcesoReservaRepositoryAdapterTest {
 
         assertThat(resultado).isPresent();
         assertThat(resultado.get().getHoldId()).isEqualTo("hold-6c0c2f41");
+    }
+
+    @Test
+    @DisplayName("buscarPorUsuario traduce la pagina de entidades encontradas")
+    void buscarPorUsuarioTraduceLaPaginaEncontrada() {
+        adapter = new ProcesoReservaRepositoryAdapter(procesoReservaJpaRepository, mapper);
+        FiltroReservasUsuario filtro = FiltroReservasUsuario.builder().usuarioId(7L).pagina(0).tamanio(20).build();
+        ProcesoReservaJpaEntity entity = mapper.toEntity(procesoDePrueba());
+        Page<ProcesoReservaJpaEntity> pagina = new PageImpl<>(List.of(entity), PageRequest.of(0, 20), 1L);
+        when(procesoReservaJpaRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(pagina);
+
+        PaginaProcesoReserva resultado = adapter.buscarPorUsuario(filtro);
+
+        assertThat(resultado.totalElementos()).isEqualTo(1L);
+        assertThat(resultado.contenido()).hasSize(1);
+        assertThat(resultado.contenido().get(0).getReservationProcessId()).isEqualTo("process-a92b47d0");
     }
 
 }

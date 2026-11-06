@@ -31,7 +31,15 @@ public class ProcesoReservaPersistenceMapper {
                 .estado(proceso.getEstado() == null ? null : proceso.getEstado().name())
                 .expiresAt(proceso.getExpiresAt())
                 .requestEventId(proceso.getRequestEventId())
+                .requestRequiredField(proceso.getRequestRequiredField())
+                .requestMessage(proceso.getRequestMessage())
+                .telefono(proceso.getTelefono())
                 .reservationId(proceso.getReservationId())
+                .reason(proceso.getReason())
+                .reasonMessage(proceso.getReasonMessage())
+                .intentosTelefono(proceso.getIntentosTelefono())
+                .cancelledAt(proceso.getCancelledAt())
+                .cancelReason(proceso.getCancelReason())
                 .historial(toHistorialEmbeddable(proceso.getHistorial()))
                 .build();
     }
@@ -53,7 +61,15 @@ public class ProcesoReservaPersistenceMapper {
                 .estado(entity.getEstado() == null ? null : EstadoProcesoReserva.valueOf(entity.getEstado()))
                 .expiresAt(entity.getExpiresAt())
                 .requestEventId(entity.getRequestEventId())
+                .requestRequiredField(entity.getRequestRequiredField())
+                .requestMessage(entity.getRequestMessage())
+                .telefono(entity.getTelefono())
                 .reservationId(entity.getReservationId())
+                .reason(entity.getReason())
+                .reasonMessage(entity.getReasonMessage())
+                .intentosTelefono(entity.getIntentosTelefono())
+                .cancelledAt(entity.getCancelledAt())
+                .cancelReason(entity.getCancelReason())
                 .historial(toHistorialDomain(entity.getHistorial()))
                 .build();
     }

@@ -23,11 +23,15 @@ class EstadoProcesoReservaTest {
                 Arguments.of(EstadoProcesoReserva.HOLD_CREADO, EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA),
                 Arguments.of(EstadoProcesoReserva.HOLD_CREADO, EstadoProcesoReserva.VENCIDA),
                 Arguments.of(EstadoProcesoReserva.HOLD_CREADO, EstadoProcesoReserva.INVALIDA),
+                Arguments.of(EstadoProcesoReserva.HOLD_CREADO, EstadoProcesoReserva.CONFIRMADA),
                 Arguments.of(EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA, EstadoProcesoReserva.ESPERANDO_TELEFONO),
+                Arguments.of(EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA, EstadoProcesoReserva.CONFIRMADA),
                 Arguments.of(EstadoProcesoReserva.ESPERANDO_TELEFONO, EstadoProcesoReserva.TELEFONO_ENVIADO),
+                Arguments.of(EstadoProcesoReserva.ESPERANDO_TELEFONO, EstadoProcesoReserva.CONFIRMADA),
                 Arguments.of(EstadoProcesoReserva.TELEFONO_ENVIADO, EstadoProcesoReserva.CONFIRMADA),
                 Arguments.of(EstadoProcesoReserva.TELEFONO_ENVIADO, EstadoProcesoReserva.TELEFONO_RECHAZADO),
                 Arguments.of(EstadoProcesoReserva.TELEFONO_RECHAZADO, EstadoProcesoReserva.TELEFONO_ENVIADO),
+                Arguments.of(EstadoProcesoReserva.TELEFONO_RECHAZADO, EstadoProcesoReserva.CONFIRMADA),
                 Arguments.of(EstadoProcesoReserva.TELEFONO_RECHAZADO, EstadoProcesoReserva.VENCIDA),
                 Arguments.of(EstadoProcesoReserva.CONFIRMADA, EstadoProcesoReserva.CANCELADA));
     }

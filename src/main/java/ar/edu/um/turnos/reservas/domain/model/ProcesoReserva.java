@@ -60,8 +60,49 @@ public class ProcesoReserva {
     /** {@code eventId} de {@code AdditionalInformationRequested}; se devuelve como {@code requestEventId} (#29). */
     private String requestEventId;
 
+    /**
+     * {@code requiredField} del ultimo {@code AdditionalInformationRequested}
+     * recibido (#29). Hoy la catedra solo envia {@code PHONE_NUMBER}, pero se
+     * guarda el valor crudo y no un enum: un valor distinto se registra en
+     * vez de asumirse (§15.4 de la referencia).
+     */
+    private String requestRequiredField;
+
+    /** {@code message} del ultimo {@code AdditionalInformationRequested} recibido (#29). */
+    private String requestMessage;
+
+    /** Telefono normalizado enviado a la catedra (#30, §15.5 de la referencia). Nunca se escribe en claro en los logs. */
+    private String telefono;
+
     /** {@code reservationId} del lado de la catedra; solo existe una vez {@link EstadoProcesoReserva#CONFIRMADA}. */
     private Long reservationId;
+
+    /**
+     * Motivo del ultimo resultado no exitoso ({@code reason} de {@code
+     * AdditionalInformationRejected}, {@code AppointmentProcessExpired} o
+     * {@code AppointmentProcessInvalid}, #31). Se sobreescribe con cada
+     * reintento de telefono rechazado, asi que es siempre el motivo mas
+     * reciente y no un historial.
+     */
+    private String reason;
+
+    /** {@code message} del ultimo {@code AdditionalInformationRejected} recibido (#31). Solo ese evento lo trae. */
+    private String reasonMessage;
+
+    /**
+     * Cuantas veces se envio un telefono para este proceso (#31, §18.4 de la
+     * referencia: "los reintentos deben ser limitados y observables"). Se
+     * incrementa en cada {@code POST .../phone} aceptado, incluidos los
+     * reintentos tras un {@code AdditionalInformationRejected}.
+     */
+    @Builder.Default
+    private int intentosTelefono = 0;
+
+    /** {@code cancelledAt} que informa la catedra al cancelar (#34, §12 de la referencia). */
+    private Instant cancelledAt;
+
+    /** Motivo opcional que el usuario mando al cancelar (#34, §12 de la referencia; hasta 500 caracteres). */
+    private String cancelReason;
 
     @Builder.Default
     private List<TransicionProcesoReserva> historial = new ArrayList<>();
