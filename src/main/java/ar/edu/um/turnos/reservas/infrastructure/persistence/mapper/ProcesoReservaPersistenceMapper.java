@@ -38,6 +38,8 @@ public class ProcesoReservaPersistenceMapper {
                 .reason(proceso.getReason())
                 .reasonMessage(proceso.getReasonMessage())
                 .intentosTelefono(proceso.getIntentosTelefono())
+                .cancelledAt(proceso.getCancelledAt())
+                .cancelReason(proceso.getCancelReason())
                 .historial(toHistorialEmbeddable(proceso.getHistorial()))
                 .build();
     }
@@ -66,6 +68,8 @@ public class ProcesoReservaPersistenceMapper {
                 .reason(entity.getReason())
                 .reasonMessage(entity.getReasonMessage())
                 .intentosTelefono(entity.getIntentosTelefono())
+                .cancelledAt(entity.getCancelledAt())
+                .cancelReason(entity.getCancelReason())
                 .historial(toHistorialDomain(entity.getHistorial()))
                 .build();
     }
