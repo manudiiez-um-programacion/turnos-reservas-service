@@ -2,8 +2,11 @@ package ar.edu.um.turnos.reservas.application.usecases;
 
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 
+import ar.edu.um.turnos.config.catedra.exception.CatedraServerErrorException;
 import ar.edu.um.turnos.reservas.application.exception.ExternalPatientMismatchException;
 import ar.edu.um.turnos.reservas.application.exception.HoldNoEncontradoException;
 import ar.edu.um.turnos.reservas.application.exception.HoldOwnerMismatchException;
@@ -13,10 +16,12 @@ import ar.edu.um.turnos.reservas.application.exception.ProcesoReservaAjenoExcept
 import ar.edu.um.turnos.reservas.domain.model.ConfirmacionHoldCatedra;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.ReservaCatedraEncontrada;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConfirmarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.TransicionarProcesoReservaUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.out.ConfirmarHoldCatedraPort;
+import ar.edu.um.turnos.reservas.domain.ports.out.ConsultarReservaCatedraPort;
 import ar.edu.um.turnos.reservas.domain.ports.out.ProcesoReservaRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +38,17 @@ import lombok.extern.slf4j.Slf4j;
  * cierran el proceso local (§18.3): un evento tardio no puede reabrirlo.
  * {@code HOLD_OWNER_MISMATCH} y {@code EXTERNAL_PATIENT_MISMATCH} se
  * registran como inconsistencia y se propagan sin tocar el estado local.
+ *
+ * <p>Un timeout o un error de infraestructura ({@code CatedraServerErrorException}
+ * o {@code ResourceAccessException}, nunca reintentados a ciegas por
+ * {@code CatedraClient}) se reconcilian antes de repetir la llamada (#36,
+ * §18.4): se busca el {@code reservationProcessId} en
+ * {@code GET /api/appointments} filtrado por {@code externalPatientId}. Su
+ * sola presencia ahí ya prueba que la catedra creo la reserva
+ * {@code PHONE_PENDING} —el confirm nunca se queda a medias del lado de
+ * ellos—, así que alcanza para alinear el estado local sin repetir la
+ * llamada. Si todavia no esta, se permite exactamente un reintento acotado;
+ * si ese reintento tambien da timeout, se propaga sin insistir mas.
  */
 @Slf4j
 @Component
@@ -41,6 +57,7 @@ public class ConfirmarHoldUseCaseImpl implements ConfirmarHoldUseCase {
 
     private final ProcesoReservaRepositoryPort procesoReservaRepositoryPort;
     private final ConfirmarHoldCatedraPort confirmarHoldCatedraPort;
+    private final ConsultarReservaCatedraPort consultarReservaCatedraPort;
     private final TransicionarProcesoReservaUseCase transicionarProcesoReservaUseCase;
 
     @Override
@@ -66,6 +83,10 @@ public class ConfirmarHoldUseCaseImpl implements ConfirmarHoldUseCase {
             proceso = procesoReservaRepositoryPort.guardar(proceso);
         }
 
+        return intentarConfirmar(proceso, solicitud, true);
+    }
+
+    private ProcesoReserva intentarConfirmar(ProcesoReserva proceso, SolicitudConfirmacionHold solicitud, boolean permitirReconciliacion) {
         try {
             ConfirmacionHoldCatedra confirmacion = confirmarHoldCatedraPort.confirmar(
                     proceso, solicitud.externalPatientId(), solicitud.patientFirstName(), solicitud.patientLastName());
@@ -84,6 +105,38 @@ public class ConfirmarHoldUseCaseImpl implements ConfirmarHoldUseCase {
         } catch (HoldOwnerMismatchException | ExternalPatientMismatchException inconsistencia) {
             log.warn("Inconsistencia confirmando el hold {}: {}", solicitud.holdId(), inconsistencia.getMessage());
             throw inconsistencia;
+        } catch (CatedraServerErrorException | ResourceAccessException timeout) {
+            if (!permitirReconciliacion) {
+                log.warn("Reintento de la confirmacion del hold {} agotado tras reconciliar: {}",
+                        solicitud.holdId(), timeout.getMessage());
+                throw timeout;
+            }
+            return reconciliarYReintentarConfirmacion(proceso, solicitud, timeout);
+        }
+    }
+
+    private ProcesoReserva reconciliarYReintentarConfirmacion(
+            ProcesoReserva proceso, SolicitudConfirmacionHold solicitud, RuntimeException timeout) {
+        log.warn("Timeout o error de infraestructura confirmando el hold {}: se reconcilia antes de reintentar ({})",
+                solicitud.holdId(), timeout.getMessage());
+
+        Optional<ReservaCatedraEncontrada> encontrada = buscarEnLaCatedra(solicitud.externalPatientId(), proceso.getReservationProcessId());
+        if (encontrada.isPresent()) {
+            log.info("La catedra ya tenia aplicada la confirmacion del hold {} (status={}): se alinea el estado local sin repetir la llamada",
+                    solicitud.holdId(), encontrada.get().status());
+            return avanzarAEsperandoTelefono(proceso);
+        }
+
+        log.info("La catedra todavia no tiene la confirmacion del hold {}: se reintenta una vez, acotado", solicitud.holdId());
+        return intentarConfirmar(proceso, solicitud, false);
+    }
+
+    private Optional<ReservaCatedraEncontrada> buscarEnLaCatedra(String externalPatientId, String reservationProcessId) {
+        try {
+            return consultarReservaCatedraPort.buscarPorReservationProcessId(externalPatientId, reservationProcessId);
+        } catch (CatedraServerErrorException | ResourceAccessException fallo) {
+            log.warn("No se pudo reconciliar el proceso {} contra la catedra: {}", reservationProcessId, fallo.getMessage());
+            return Optional.empty();
         }
     }
 

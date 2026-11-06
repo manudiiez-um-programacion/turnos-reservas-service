@@ -5,16 +5,23 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import ar.edu.um.turnos.reservas.application.exception.EstadoReservaInvalidoException;
 import ar.edu.um.turnos.reservas.application.exception.ExternalPatientMismatchException;
 import ar.edu.um.turnos.reservas.application.exception.HoldNoEncontradoException;
 import ar.edu.um.turnos.reservas.application.exception.HoldOwnerMismatchException;
 import ar.edu.um.turnos.reservas.application.exception.HoldVencidoException;
+import ar.edu.um.turnos.reservas.application.exception.LimiteReintentosTelefonoException;
 import ar.edu.um.turnos.reservas.application.exception.ProcesoReservaAjenoException;
+import ar.edu.um.turnos.reservas.application.exception.ProcesoVencidoException;
 import ar.edu.um.turnos.reservas.application.exception.ProfesionalDeshabilitadoException;
 import ar.edu.um.turnos.reservas.application.exception.ProfesionalNoEncontradoException;
+import ar.edu.um.turnos.reservas.application.exception.ReservaNoCancelableException;
+import ar.edu.um.turnos.reservas.application.exception.ReservaNoEncontradaException;
+import ar.edu.um.turnos.reservas.application.exception.ReservaOwnerMismatchException;
 import ar.edu.um.turnos.reservas.application.exception.SlotInvalidoException;
 import ar.edu.um.turnos.reservas.application.exception.SlotYaBloqueadoException;
 import ar.edu.um.turnos.reservas.application.exception.SlotYaReservadoException;
+import ar.edu.um.turnos.reservas.application.exception.TelefonoInvalidoException;
 import ar.edu.um.turnos.reservas.application.exception.TransicionProcesoReservaInvalidaException;
 
 /**
@@ -111,6 +118,62 @@ public class ReservasExceptionHandler {
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problema.setTitle("Proceso en un estado que no admite la operacion");
         problema.setProperty("code", "RESERVATION_PROCESS_INVALID_STATE");
+        return problema;
+    }
+
+    @ExceptionHandler(TelefonoInvalidoException.class)
+    public ProblemDetail manejarTelefonoInvalido(TelefonoInvalidoException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problema.setTitle("Telefono invalido");
+        problema.setProperty("code", "INVALID_PHONE_NUMBER");
+        return problema;
+    }
+
+    @ExceptionHandler(ProcesoVencidoException.class)
+    public ProblemDetail manejarProcesoVencido(ProcesoVencidoException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problema.setTitle("Proceso vencido");
+        problema.setProperty("code", "RESERVATION_PROCESS_EXPIRED");
+        return problema;
+    }
+
+    @ExceptionHandler(LimiteReintentosTelefonoException.class)
+    public ProblemDetail manejarLimiteReintentosTelefono(LimiteReintentosTelefonoException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problema.setTitle("Limite de reintentos de telefono alcanzado");
+        problema.setProperty("code", "PHONE_RETRY_LIMIT_EXCEEDED");
+        return problema;
+    }
+
+    @ExceptionHandler(EstadoReservaInvalidoException.class)
+    public ProblemDetail manejarEstadoReservaInvalido(EstadoReservaInvalidoException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problema.setTitle("Estado invalido");
+        problema.setProperty("code", "INVALID_STATUS");
+        return problema;
+    }
+
+    @ExceptionHandler(ReservaNoEncontradaException.class)
+    public ProblemDetail manejarReservaNoEncontrada(ReservaNoEncontradaException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problema.setTitle("Reserva inexistente");
+        problema.setProperty("code", "RESERVATION_NOT_FOUND");
+        return problema;
+    }
+
+    @ExceptionHandler(ReservaOwnerMismatchException.class)
+    public ProblemDetail manejarReservaOwnerMismatch(ReservaOwnerMismatchException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        problema.setTitle("Reserva de otra cuenta tecnica");
+        problema.setProperty("code", "RESERVATION_OWNER_MISMATCH");
+        return problema;
+    }
+
+    @ExceptionHandler(ReservaNoCancelableException.class)
+    public ProblemDetail manejarReservaNoCancelable(ReservaNoCancelableException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problema.setTitle("Reserva no cancelable");
+        problema.setProperty("code", "RESERVATION_NOT_CANCELLABLE");
         return problema;
     }
 

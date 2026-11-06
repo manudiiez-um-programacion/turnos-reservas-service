@@ -2,11 +2,15 @@ package ar.edu.um.turnos.reservas.application.usecases;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -62,6 +66,7 @@ class CrearHoldUseCaseImplTest {
         assertThat(proceso.getHoldId()).isEqualTo("hold-6c0c2f41");
         assertThat(proceso.getReservationProcessId()).isEqualTo("process-a92b47d0");
         assertThat(proceso.getUsuarioId()).isEqualTo(7L);
+        assertThat(proceso.getExternalPatientId()).isEqualTo("user-42");
         assertThat(proceso.getProfessionalId()).isEqualTo(15L);
         assertThat(proceso.getProfessionalNombreHistorico()).isEqualTo("Ana");
         assertThat(proceso.getProfessionalApellidoHistorico()).isEqualTo("Gomez");
@@ -71,6 +76,35 @@ class CrearHoldUseCaseImplTest {
         assertThat(proceso.getExpiresAt()).isEqualTo(expiresAt);
         assertThat(proceso.getHistorial()).hasSize(1);
         assertThat(proceso.getHistorial().get(0).estado()).isEqualTo(EstadoProcesoReserva.HOLD_CREADO);
+    }
+
+    @Test
+    void siYaHayUnProcesoVigenteParaElMismoSlotSeReutilizaSinPedirUnHoldNuevo() {
+        SolicitudHold solicitud = SolicitudHold.builder()
+                .professionalId(15L)
+                .fecha(LocalDate.of(2026, 9, 14))
+                .horaInicio(LocalTime.of(9, 30))
+                .usuarioId(7L)
+                .externalPatientId("user-42")
+                .build();
+        ProcesoReserva vigente = ProcesoReserva.builder()
+                .holdId("hold-6c0c2f41")
+                .reservationProcessId("process-a92b47d0")
+                .usuarioId(7L)
+                .professionalId(15L)
+                .fecha(solicitud.fecha())
+                .horaInicio(solicitud.horaInicio())
+                .estado(EstadoProcesoReserva.HOLD_CREADO)
+                .build();
+        when(procesoReservaRepositoryPort.buscarVigentePorSlot(
+                eq(7L), eq(15L), eq(solicitud.fecha()), eq(solicitud.horaInicio()), any()))
+                .thenReturn(Optional.of(vigente));
+
+        ProcesoReserva resultado = useCase.crear(solicitud);
+
+        assertThat(resultado).isSameAs(vigente);
+        verify(crearHoldCatedraPort, never()).crear(any());
+        verify(validarSlotCatalogoPort, never()).validar(any(), any(), any());
     }
 
 }
