@@ -13,6 +13,7 @@ import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudEnvioTelefono;
 import ar.edu.um.turnos.reservas.domain.ports.in.CancelarReservaUseCase;
+import ar.edu.um.turnos.reservas.domain.ports.in.CerrarProcesosVencidosUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConfirmarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarReservasUseCase;
@@ -42,6 +43,7 @@ public class ReservasService {
     private final ConsultarReservasUseCase consultarReservasUseCase;
     private final CancelarReservaUseCase cancelarReservaUseCase;
     private final RecuperarProcesosPendientesUseCase recuperarProcesosPendientesUseCase;
+    private final CerrarProcesosVencidosUseCase cerrarProcesosVencidosUseCase;
 
     public void procesarEventoAccion(EventoAccionReserva evento) {
         procesarEventoAccionUseCase.procesar(evento);
@@ -77,6 +79,10 @@ public class ReservasService {
 
     public void recuperarProcesosPendientes() {
         recuperarProcesosPendientesUseCase.recuperar();
+    }
+
+    public int cerrarProcesosVencidos() {
+        return cerrarProcesosVencidosUseCase.cerrarVencidos();
     }
 
 }

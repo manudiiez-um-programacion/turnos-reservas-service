@@ -10,6 +10,7 @@ import ar.edu.um.turnos.config.catedra.exception.CatedraServerErrorException;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ReservaCatedraEncontrada;
+import ar.edu.um.turnos.reservas.domain.ports.in.CerrarProcesosVencidosUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.RecuperarProcesosPendientesUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.TransicionarProcesoReservaUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.out.ConsultarReservaCatedraPort;
@@ -23,9 +24,11 @@ import lombok.extern.slf4j.Slf4j;
  * reconciliarlo contra la catedra o dejarlo esperando sin tocarlo.
  *
  * <ul>
- *   <li>{@code expiresAt} ya pasado: se cierra como {@link EstadoProcesoReserva#VENCIDA}
- *       sin intentar ninguna llamada —el mismo criterio que #38 va a aplicar
- *       de forma periodica, aca aplicado una vez al arrancar.</li>
+ *   <li>{@code expiresAt} ya pasado: se cierra como {@code VENCIDA}
+ *       delegando en {@link CerrarProcesosVencidosUseCase} (#38) — el mismo
+ *       criterio, con el mismo margen de reloj, que la tarea programada
+ *       aplica de forma periodica, aca aplicado una vez al arrancar antes de
+ *       decidir que hacer con el resto.</li>
  *   <li>{@link EstadoProcesoReserva#CONFIRMACION_INICIAL_ENVIADA}: es el
  *       unico estado no final en el que ya se intento (o se estaba
  *       intentando) una llamada con efectos antes del reinicio, asi que se
@@ -35,8 +38,9 @@ import lombok.extern.slf4j.Slf4j;
  *       catedra no responde, se deja el proceso como esta: no se reintenta
  *       el {@code confirm} desde aca, para que la recuperacion nunca falle
  *       ni se cuelgue por una catedra caida. Un proximo intento del usuario,
- *       o el cierre por vencimiento de #38, lo terminan de resolver.</li>
- *   <li>Cualquier otro estado no final ({@link EstadoProcesoReserva#HOLD_CREADO},
+ *       o el proximo cierre por vencimiento de #38, lo terminan de
+ *       resolver.</li>
+ *   <li>Cualquier otro estado no final y vigente ({@link EstadoProcesoReserva#HOLD_CREADO},
  *       {@link EstadoProcesoReserva#ESPERANDO_TELEFONO}, {@link EstadoProcesoReserva#TELEFONO_ENVIADO},
  *       {@link EstadoProcesoReserva#TELEFONO_RECHAZADO}): no tuvo ninguna
  *       llamada con efectos pendiente de confirmar, asi que simplemente
@@ -58,21 +62,20 @@ public class RecuperarProcesosPendientesUseCaseImpl implements RecuperarProcesos
     private final ProcesoReservaRepositoryPort procesoReservaRepositoryPort;
     private final ConsultarReservaCatedraPort consultarReservaCatedraPort;
     private final TransicionarProcesoReservaUseCase transicionarProcesoReservaUseCase;
+    private final CerrarProcesosVencidosUseCase cerrarProcesosVencidosUseCase;
 
     @Override
     public void recuperar() {
-        List<ProcesoReserva> pendientes = procesoReservaRepositoryPort.listarNoFinales();
-        log.info("Recuperacion al arrancar: {} proceso(s) de reserva no final(es) para revisar", pendientes.size());
+        int vencidos = cerrarProcesosVencidosUseCase.cerrarVencidos();
 
-        int vencidos = 0;
+        List<ProcesoReserva> vigentes = procesoReservaRepositoryPort.listarNoFinales();
+        log.info("Recuperacion al arrancar: {} vencido(s) cerrado(s), {} proceso(s) vigente(s) para revisar",
+                vencidos, vigentes.size());
+
         int reconciliados = 0;
         int enEspera = 0;
-        Instant ahora = Instant.now();
-        for (ProcesoReserva proceso : pendientes) {
-            if (proceso.getExpiresAt() != null && !proceso.getExpiresAt().isAfter(ahora)) {
-                cerrarComoVencido(proceso);
-                vencidos++;
-            } else if (proceso.getEstado() == EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA) {
+        for (ProcesoReserva proceso : vigentes) {
+            if (proceso.getEstado() == EstadoProcesoReserva.CONFIRMACION_INICIAL_ENVIADA) {
                 reconciliados += reconciliar(proceso) ? 1 : 0;
             } else {
                 log.debug("Proceso {} en estado {} sigue esperando (sin accion al arrancar)",
@@ -83,13 +86,6 @@ public class RecuperarProcesosPendientesUseCaseImpl implements RecuperarProcesos
 
         log.info("Recuperacion al arrancar completa: {} vencido(s), {} reconciliado(s), {} en espera",
                 vencidos, reconciliados, enEspera);
-    }
-
-    private void cerrarComoVencido(ProcesoReserva proceso) {
-        ProcesoReserva cerrado = transicionarProcesoReservaUseCase.transicionar(proceso, EstadoProcesoReserva.VENCIDA, Instant.now());
-        procesoReservaRepositoryPort.guardar(cerrado);
-        log.info("Proceso {} vencido al arrancar (expiraba {}): cerrado como VENCIDA",
-                proceso.getReservationProcessId(), proceso.getExpiresAt());
     }
 
     private boolean reconciliar(ProcesoReserva proceso) {
