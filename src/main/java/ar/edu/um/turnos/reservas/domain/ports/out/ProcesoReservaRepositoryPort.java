@@ -2,6 +2,8 @@ package ar.edu.um.turnos.reservas.domain.ports.out;
 
 import java.util.Optional;
 
+import ar.edu.um.turnos.reservas.domain.model.FiltroReservasUsuario;
+import ar.edu.um.turnos.reservas.domain.model.PaginaProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 
 /**
@@ -19,5 +21,8 @@ public interface ProcesoReservaRepositoryPort {
     Optional<ProcesoReserva> buscarPorReservationProcessId(String reservationProcessId);
 
     Optional<ProcesoReserva> buscarPorHoldId(String holdId);
+
+    /** Pagina de procesos del {@code usuarioId} del filtro, nunca de otro (#33). */
+    PaginaProcesoReserva buscarPorUsuario(FiltroReservasUsuario filtro);
 
 }

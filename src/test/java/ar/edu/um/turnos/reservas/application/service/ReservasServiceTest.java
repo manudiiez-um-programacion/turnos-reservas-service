@@ -5,6 +5,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -12,12 +13,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.EventoAccionReserva;
+import ar.edu.um.turnos.reservas.domain.model.FiltroReservasUsuario;
+import ar.edu.um.turnos.reservas.domain.model.PaginaProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudEnvioTelefono;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConfirmarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarHoldUseCase;
+import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarReservasUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.CrearHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.EnviarTelefonoUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ProcesarEventoAccionUseCase;
@@ -44,9 +48,12 @@ class ReservasServiceTest {
     @Mock
     private EnviarTelefonoUseCase enviarTelefonoUseCase;
 
+    @Mock
+    private ConsultarReservasUseCase consultarReservasUseCase;
+
     private ReservasService crearService() {
         return new ReservasService(procesarEventoAccionUseCase, transicionarProcesoReservaUseCase, crearHoldUseCase,
-                confirmarHoldUseCase, consultarHoldUseCase, enviarTelefonoUseCase);
+                confirmarHoldUseCase, consultarHoldUseCase, enviarTelefonoUseCase, consultarReservasUseCase);
     }
 
     @Test
@@ -107,6 +114,16 @@ class ReservasServiceTest {
         when(enviarTelefonoUseCase.enviar(solicitud)).thenReturn(esperado);
 
         assertThat(service.enviarTelefono(solicitud)).isSameAs(esperado);
+    }
+
+    @Test
+    void delegaEnElCasoDeUsoDeConsultarReservas() {
+        ReservasService service = crearService();
+        FiltroReservasUsuario filtro = FiltroReservasUsuario.builder().usuarioId(7L).build();
+        PaginaProcesoReserva esperado = new PaginaProcesoReserva(List.of(), 0L);
+        when(consultarReservasUseCase.consultar(filtro)).thenReturn(esperado);
+
+        assertThat(service.consultarReservas(filtro)).isSameAs(esperado);
     }
 
 }
