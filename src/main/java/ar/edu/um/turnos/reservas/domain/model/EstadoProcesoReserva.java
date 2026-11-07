@@ -33,6 +33,14 @@ import java.util.Set;
  *       {@link #CONFIRMADA} (#34) — es una operacion nueva sobre una reserva ya
  *       concluida, no una reapertura del proceso.</li>
  * </ul>
+ *
+ * <p>{@link #CONFIRMADA}, igual que {@link #VENCIDA} e {@link #INVALIDA}, es
+ * alcanzable desde cualquier estado no final y no solo desde
+ * {@link #TELEFONO_ENVIADO} (#31): el orden entre REST y Kafka no esta
+ * garantizado, y {@code AppointmentConfirmed} puede llegar antes de que se
+ * haya persistido la respuesta del {@code confirm} o incluso del
+ * {@code AdditionalInformationRequested}. La convergencia se resuelve asi,
+ * aceptando el resultado que llegue primero sin duplicar la reserva.
  */
 public enum EstadoProcesoReserva {
 
@@ -62,11 +70,11 @@ public enum EstadoProcesoReserva {
 
     private static Map<EstadoProcesoReserva, Set<EstadoProcesoReserva>> construirTransicionesValidas() {
         Map<EstadoProcesoReserva, Set<EstadoProcesoReserva>> transiciones = new EnumMap<>(EstadoProcesoReserva.class);
-        transiciones.put(HOLD_CREADO, EnumSet.of(CONFIRMACION_INICIAL_ENVIADA, VENCIDA, INVALIDA));
-        transiciones.put(CONFIRMACION_INICIAL_ENVIADA, EnumSet.of(ESPERANDO_TELEFONO, VENCIDA, INVALIDA));
-        transiciones.put(ESPERANDO_TELEFONO, EnumSet.of(TELEFONO_ENVIADO, VENCIDA, INVALIDA));
+        transiciones.put(HOLD_CREADO, EnumSet.of(CONFIRMACION_INICIAL_ENVIADA, CONFIRMADA, VENCIDA, INVALIDA));
+        transiciones.put(CONFIRMACION_INICIAL_ENVIADA, EnumSet.of(ESPERANDO_TELEFONO, CONFIRMADA, VENCIDA, INVALIDA));
+        transiciones.put(ESPERANDO_TELEFONO, EnumSet.of(TELEFONO_ENVIADO, CONFIRMADA, VENCIDA, INVALIDA));
         transiciones.put(TELEFONO_ENVIADO, EnumSet.of(CONFIRMADA, TELEFONO_RECHAZADO, VENCIDA, INVALIDA));
-        transiciones.put(TELEFONO_RECHAZADO, EnumSet.of(TELEFONO_ENVIADO, VENCIDA, INVALIDA));
+        transiciones.put(TELEFONO_RECHAZADO, EnumSet.of(TELEFONO_ENVIADO, CONFIRMADA, VENCIDA, INVALIDA));
         transiciones.put(CONFIRMADA, EnumSet.of(CANCELADA));
         transiciones.put(VENCIDA, EnumSet.noneOf(EstadoProcesoReserva.class));
         transiciones.put(INVALIDA, EnumSet.noneOf(EstadoProcesoReserva.class));

@@ -5,9 +5,11 @@ import org.springframework.stereotype.Component;
 import ar.edu.um.turnos.auth.domain.model.Usuario;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
+import ar.edu.um.turnos.reservas.domain.model.SolicitudEnvioTelefono;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.ConfirmarHoldRequest;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.CrearHoldRequest;
+import ar.edu.um.turnos.reservas.infrastructure.web.dto.EnviarTelefonoRequest;
 import ar.edu.um.turnos.reservas.infrastructure.web.dto.HoldResponse;
 
 /** Traduce entre el borde web de holds (#27, #28) y el dominio de {@code reservas}. */
@@ -40,6 +42,17 @@ public class HoldWebMapper {
                 .build();
     }
 
+    public SolicitudEnvioTelefono toSolicitudEnvioTelefono(String holdId, EnviarTelefonoRequest request, Usuario usuario) {
+        if (request == null) {
+            return null;
+        }
+        return SolicitudEnvioTelefono.builder()
+                .holdId(holdId)
+                .usuarioId(usuario.getId())
+                .telefono(request.phoneNumber())
+                .build();
+    }
+
     public HoldResponse toResponse(ProcesoReserva proceso) {
         if (proceso == null) {
             return null;
@@ -48,7 +61,10 @@ public class HoldWebMapper {
                 proceso.getHoldId(),
                 proceso.getReservationProcessId(),
                 proceso.getEstado() == null ? null : proceso.getEstado().name(),
-                proceso.getExpiresAt());
+                proceso.getExpiresAt(),
+                proceso.getReservationId(),
+                proceso.getReason(),
+                proceso.getReasonMessage());
     }
 
 }
