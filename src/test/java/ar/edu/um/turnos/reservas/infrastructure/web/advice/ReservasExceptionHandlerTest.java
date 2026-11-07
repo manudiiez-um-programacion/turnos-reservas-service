@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 
+import ar.edu.um.turnos.reservas.application.exception.EstadoReservaInvalidoException;
 import ar.edu.um.turnos.reservas.application.exception.ExternalPatientMismatchException;
 import ar.edu.um.turnos.reservas.application.exception.HoldNoEncontradoException;
 import ar.edu.um.turnos.reservas.application.exception.HoldOwnerMismatchException;
@@ -19,6 +20,9 @@ import ar.edu.um.turnos.reservas.application.exception.LimiteReintentosTelefonoE
 import ar.edu.um.turnos.reservas.application.exception.ProcesoVencidoException;
 import ar.edu.um.turnos.reservas.application.exception.ProfesionalDeshabilitadoException;
 import ar.edu.um.turnos.reservas.application.exception.ProfesionalNoEncontradoException;
+import ar.edu.um.turnos.reservas.application.exception.ReservaNoCancelableException;
+import ar.edu.um.turnos.reservas.application.exception.ReservaNoEncontradaException;
+import ar.edu.um.turnos.reservas.application.exception.ReservaOwnerMismatchException;
 import ar.edu.um.turnos.reservas.application.exception.SlotInvalidoException;
 import ar.edu.um.turnos.reservas.application.exception.SlotYaBloqueadoException;
 import ar.edu.um.turnos.reservas.application.exception.SlotYaReservadoException;
@@ -160,6 +164,42 @@ class ReservasExceptionHandlerTest {
 
         assertThat(problema.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
         assertThat(problema.getProperties()).containsEntry("code", "PHONE_RETRY_LIMIT_EXCEEDED");
+    }
+
+    @Test
+    @DisplayName("EstadoReservaInvalidoException se traduce a un 400 con code INVALID_STATUS")
+    void estadoReservaInvalidoSeTraduceA400() {
+        ProblemDetail problema = handler.manejarEstadoReservaInvalido(new EstadoReservaInvalidoException("NO_EXISTE"));
+
+        assertThat(problema.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problema.getProperties()).containsEntry("code", "INVALID_STATUS");
+    }
+
+    @Test
+    @DisplayName("ReservaNoEncontradaException se traduce a un 404 con code RESERVATION_NOT_FOUND")
+    void reservaNoEncontradaSeTraduceA404() {
+        ProblemDetail problema = handler.manejarReservaNoEncontrada(new ReservaNoEncontradaException("process-1"));
+
+        assertThat(problema.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
+        assertThat(problema.getProperties()).containsEntry("code", "RESERVATION_NOT_FOUND");
+    }
+
+    @Test
+    @DisplayName("ReservaOwnerMismatchException se traduce a un 403 con code RESERVATION_OWNER_MISMATCH")
+    void reservaOwnerMismatchSeTraduceA403() {
+        ProblemDetail problema = handler.manejarReservaOwnerMismatch(new ReservaOwnerMismatchException("process-1", null));
+
+        assertThat(problema.getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
+        assertThat(problema.getProperties()).containsEntry("code", "RESERVATION_OWNER_MISMATCH");
+    }
+
+    @Test
+    @DisplayName("ReservaNoCancelableException se traduce a un 409 con code RESERVATION_NOT_CANCELLABLE")
+    void reservaNoCancelableSeTraduceA409() {
+        ProblemDetail problema = handler.manejarReservaNoCancelable(new ReservaNoCancelableException("process-1"));
+
+        assertThat(problema.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
+        assertThat(problema.getProperties()).containsEntry("code", "RESERVATION_NOT_CANCELLABLE");
     }
 
 }

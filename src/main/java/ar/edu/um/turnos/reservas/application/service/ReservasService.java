@@ -5,12 +5,17 @@ import org.springframework.stereotype.Service;
 
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.EventoAccionReserva;
+import ar.edu.um.turnos.reservas.domain.model.FiltroReservasUsuario;
+import ar.edu.um.turnos.reservas.domain.model.PaginaProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.SolicitudCancelacionReserva;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudEnvioTelefono;
+import ar.edu.um.turnos.reservas.domain.ports.in.CancelarReservaUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConfirmarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarHoldUseCase;
+import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarReservasUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.CrearHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.EnviarTelefonoUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ProcesarEventoAccionUseCase;
@@ -33,6 +38,8 @@ public class ReservasService {
     private final ConfirmarHoldUseCase confirmarHoldUseCase;
     private final ConsultarHoldUseCase consultarHoldUseCase;
     private final EnviarTelefonoUseCase enviarTelefonoUseCase;
+    private final ConsultarReservasUseCase consultarReservasUseCase;
+    private final CancelarReservaUseCase cancelarReservaUseCase;
 
     public void procesarEventoAccion(EventoAccionReserva evento) {
         procesarEventoAccionUseCase.procesar(evento);
@@ -56,6 +63,14 @@ public class ReservasService {
 
     public ProcesoReserva enviarTelefono(SolicitudEnvioTelefono solicitud) {
         return enviarTelefonoUseCase.enviar(solicitud);
+    }
+
+    public PaginaProcesoReserva consultarReservas(FiltroReservasUsuario filtro) {
+        return consultarReservasUseCase.consultar(filtro);
+    }
+
+    public ProcesoReserva cancelarReserva(SolicitudCancelacionReserva solicitud) {
+        return cancelarReservaUseCase.cancelar(solicitud);
     }
 
 }
