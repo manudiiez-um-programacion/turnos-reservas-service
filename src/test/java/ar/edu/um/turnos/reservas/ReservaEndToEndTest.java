@@ -1,6 +1,7 @@
 package ar.edu.um.turnos.reservas;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -16,6 +17,8 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
@@ -66,6 +69,8 @@ import org.springframework.transaction.support.DefaultTransactionStatus;
 import ar.edu.um.turnos.auth.application.service.AuthService;
 import ar.edu.um.turnos.auth.domain.model.Usuario;
 import ar.edu.um.turnos.config.JwtProperties;
+import ar.edu.um.turnos.reservas.application.service.ReservasService;
+import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.EventoAccionReserva;
 import ar.edu.um.turnos.reservas.domain.model.FiltroReservasUsuario;
 import ar.edu.um.turnos.reservas.domain.model.PaginaProcesoReserva;
@@ -79,6 +84,17 @@ import ar.edu.um.turnos.reservas.domain.ports.out.RegistrarEventoProcesadoPort;
  * limite de reintentos, vencimiento, proceso invalido, duplicados, no
  * retroceso de estados finales, orden invertido entre REST y Kafka, y
  * aislamiento entre usuarios.
+ *
+ * <p>#39 agrega el resto del conjunto de evidencias de autorizacion e
+ * idempotencia que pide el enunciado (§10.1 y §11): aislamiento cruzado al
+ * consultar y al cancelar, que ningun endpoint acepta un
+ * {@code externalPatientId} ni un id de usuario del cliente, idempotencia de
+ * la cancelacion (por REST y por {@code AppointmentCancelled} duplicado), y
+ * que un reinicio con procesos pendientes (#37) y el cierre periodico de
+ * vencidos (#38) dejan todo coherente sin reintentos manuales desde la
+ * prueba — se invoca directamente {@link ReservasService}, el mismo punto
+ * de entrada que usan {@code RecuperacionArranqueListener} y
+ * {@code CierreVencidosScheduler} en produccion.
  *
  * <p>Pega al {@code HoldController} real a traves de {@code MockMvc} y usa
  * un broker Kafka embebido (sin Docker, mismo patron que {@code
@@ -136,6 +152,12 @@ class ReservaEndToEndTest {
     @MockitoBean
     private AuthService authService;
 
+    @Autowired
+    private FakeProcesoReservaRepositoryPort procesoReservaRepositoryPort;
+
+    @Autowired
+    private ReservasService reservasService;
+
     private KafkaTemplate<String, String> productorDePrueba;
     // Estatico y no de instancia: JUnit crea una instancia de la clase por cada @Test, pero la
     // deduplicacion por eventId (FakeRegistrarEventoProcesadoPort) es un bean de Spring compartido
@@ -151,6 +173,7 @@ class ReservaEndToEndTest {
 
         catedraSimulado = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         catedraSimulado.createContext("/api/appointment-holds", ReservaEndToEndTest::responderHoldsCatedra);
+        catedraSimulado.createContext("/api/appointments", ReservaEndToEndTest::responderAppointmentsCatedra);
         catedraSimulado.start();
     }
 
@@ -201,6 +224,20 @@ class ReservaEndToEndTest {
         responder(exchange, 404, "{}");
     }
 
+    /** {@code POST /api/appointments/{reservationProcessId}/cancel} (#34), idempotente como exige §12. */
+    private static void responderAppointmentsCatedra(HttpExchange exchange) throws IOException {
+        String path = exchange.getRequestURI().getPath();
+        if ("POST".equals(exchange.getRequestMethod()) && path.endsWith("/cancel")) {
+            String reservationProcessId = path.substring("/api/appointments/".length(), path.length() - "/cancel".length());
+            String cancelledAt = Instant.now().toString();
+            responder(exchange, 200, """
+                    {"reservationId":1,"reservationProcessId":"%s","status":"CANCELLED","cancelledAt":"%s"}
+                    """.formatted(reservationProcessId, cancelledAt));
+            return;
+        }
+        responder(exchange, 404, "{}");
+    }
+
     private static void responder(HttpExchange exchange, int status, String cuerpo) throws IOException {
         byte[] bytes = cuerpo.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().add("Content-Type", "application/json");
@@ -211,6 +248,12 @@ class ReservaEndToEndTest {
 
     @BeforeEach
     void prepararUsuariosYProductor() {
+        // Bean singleton compartido por toda la clase (ver el comentario de contadorEventos):
+        // sin esto, el guardia de #36 contra un segundo hold (buscarVigentePorSlot) encontraria
+        // el proceso no final que deja la prueba anterior para el mismo profesional/fecha/hora/
+        // usuario y lo devolveria en vez de dejar que crearHold() pida uno nuevo.
+        procesoReservaRepositoryPort.limpiar();
+
         when(authService.obtenerPorLogin("usuario.propietario")).thenReturn(Usuario.builder()
                 .id(7L).login("usuario.propietario").externalPatientId("ext-7").build());
         when(authService.obtenerPorLogin("usuario.ajeno")).thenReturn(Usuario.builder()
@@ -325,6 +368,29 @@ class ReservaEndToEndTest {
                     .limit(filtro.tamanio())
                     .toList();
             return new PaginaProcesoReserva(pagina, coincidentes.size());
+        }
+
+        @Override
+        public Optional<ProcesoReserva> buscarVigentePorSlot(
+                Long usuarioId, Long professionalId, LocalDate fecha, LocalTime horaInicio, Instant ahora) {
+            return porHoldId.values().stream()
+                    .filter(proceso -> proceso.getUsuarioId().equals(usuarioId))
+                    .filter(proceso -> proceso.getProfessionalId().equals(professionalId))
+                    .filter(proceso -> proceso.getFecha().equals(fecha))
+                    .filter(proceso -> proceso.getHoraInicio().equals(horaInicio))
+                    .filter(proceso -> !proceso.getEstado().esFinal())
+                    .filter(proceso -> proceso.getExpiresAt() == null || proceso.getExpiresAt().isAfter(ahora))
+                    .findFirst();
+        }
+
+        @Override
+        public List<ProcesoReserva> listarNoFinales() {
+            return porHoldId.values().stream().filter(proceso -> !proceso.getEstado().esFinal()).toList();
+        }
+
+        void limpiar() {
+            porReservationProcessId.clear();
+            porHoldId.clear();
         }
 
     }
@@ -510,6 +576,38 @@ class ReservaEndToEndTest {
                   "schemaVersion": 1
                 }
                 """.formatted(eventId, reservationProcessId, holdId, Instant.now());
+    }
+
+    private String appointmentCancelled(String eventId, String reservationProcessId, String holdId, String reason) {
+        return """
+                {
+                  "eventId": "%s",
+                  "eventType": "AppointmentCancelled",
+                  "reservationProcessId": "%s",
+                  "holdId": "%s",
+                  "reason": "%s",
+                  "occurredAt": "%s",
+                  "schemaVersion": 1
+                }
+                """.formatted(eventId, reservationProcessId, holdId, reason, Instant.now());
+    }
+
+    /** Lleva un hold hasta CONFIRMADA por el camino feliz completo (#32), para las pruebas de #39 que parten de ahi. */
+    private String[] crearYConfirmarReserva(String token, long reservationId) throws Exception {
+        String[] ids = crearHold(token);
+        String holdId = ids[0];
+        String reservationProcessId = ids[1];
+
+        confirmarHold(holdId, token);
+        publicarEnAcciones(reservationProcessId,
+                additionalInformationRequested(siguienteEventId("request"), reservationProcessId, holdId));
+        esperarEstado(holdId, token, "ESPERANDO_TELEFONO");
+
+        enviarTelefono(holdId, token, TELEFONO_VALIDO);
+        publicarEnAcciones(reservationProcessId,
+                appointmentConfirmed(siguienteEventId("confirmation"), reservationProcessId, holdId, reservationId));
+        esperarEstado(holdId, token, "CONFIRMADA");
+        return ids;
     }
 
     // ------------------------------------------------------------------
@@ -718,6 +816,198 @@ class ReservaEndToEndTest {
                                 """.formatted(TELEFONO_VALIDO)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("RESERVATION_PROCESS_OWNER_MISMATCH"));
+    }
+
+    // ------------------------------------------------------------------
+    // Escenarios (#39): autorizacion cruzada, idempotencia y reinicio
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("autorizacion: al consultar, el usuario no ve las reservas del otro")
+    void autorizacionConsultarElUsuarioNoVeLasReservasDelOtro() throws Exception {
+        String tokenPropietario = tokenPara("usuario.propietario");
+        String tokenAjeno = tokenPara("usuario.ajeno");
+        String[] idsPropietario = crearYConfirmarReserva(tokenPropietario, 7001L);
+        String[] idsAjeno = crearYConfirmarReserva(tokenAjeno, 7002L);
+
+        mockMvc.perform(get("/api/reservas").header("Authorization", "Bearer " + tokenPropietario))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].reservationProcessId").value(idsPropietario[1]));
+
+        mockMvc.perform(get("/api/reservas").header("Authorization", "Bearer " + tokenAjeno))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].reservationProcessId").value(idsAjeno[1]));
+    }
+
+    @Test
+    @DisplayName("autorizacion: el usuario no puede cancelar la reserva del otro ni conociendo su reservationProcessId")
+    void autorizacionElUsuarioNoPuedeCancelarLaReservaDelOtro() throws Exception {
+        String tokenPropietario = tokenPara("usuario.propietario");
+        String tokenAjeno = tokenPara("usuario.ajeno");
+        String[] idsPropietario = crearYConfirmarReserva(tokenPropietario, 7101L);
+
+        mockMvc.perform(post("/api/reservas/{reservationProcessId}/cancel", idsPropietario[1])
+                        .header("Authorization", "Bearer " + tokenAjeno)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("RESERVATION_PROCESS_OWNER_MISMATCH"));
+    }
+
+    @Test
+    @DisplayName("ningun endpoint acepta un externalPatientId ni un id de usuario del cliente: se ignoran")
+    void ningunEndpointAceptaExternalPatientIdNiUsuarioIdDelCliente() throws Exception {
+        String tokenPropietario = tokenPara("usuario.propietario");
+        String tokenAjeno = tokenPara("usuario.ajeno");
+
+        String cuerpoConCamposExtra = """
+                {"professionalId": %d, "date": "%s", "startTime": "%s", "externalPatientId": "ext-ajeno", "usuarioId": 99}
+                """.formatted(PROFESSIONAL_ID, FECHA, HORA_INICIO);
+        String respuesta = mockMvc.perform(post("/api/holds")
+                        .header("Authorization", "Bearer " + tokenPropietario)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpoConCamposExtra))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String holdId = JsonPath.read(respuesta, "$.holdId");
+
+        // Los campos extra se ignoraron: el dueño sigue siendo el autenticado, no "99" ni "ext-ajeno".
+        mockMvc.perform(post("/api/holds/{holdId}/confirm", holdId)
+                        .header("Authorization", "Bearer " + tokenAjeno)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"patientFirstName": "Otro", "patientLastName": "Usuario"}
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("RESERVATION_PROCESS_OWNER_MISMATCH"));
+
+        mockMvc.perform(post("/api/holds/{holdId}/confirm", holdId)
+                        .header("Authorization", "Bearer " + tokenPropietario)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"patientFirstName": "Juan", "patientLastName": "Perez"}
+                                """))
+                .andExpect(status().isAccepted());
+    }
+
+    @Test
+    @DisplayName("idempotencia: cancelar dos veces por REST deja el mismo estado final")
+    void idempotenciaCancelarDosVecesPorRestDejaElMismoEstadoFinal() throws Exception {
+        String token = tokenPara("usuario.propietario");
+        String[] ids = crearYConfirmarReserva(token, 7201L);
+        String reservationProcessId = ids[1];
+
+        String primeraRespuesta = mockMvc.perform(post("/api/reservas/{reservationProcessId}/cancel", reservationProcessId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason": "Cambio de planes"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELADA"))
+                .andReturn().getResponse().getContentAsString();
+        String cancelledAtPrimero = JsonPath.read(primeraRespuesta, "$.cancelledAt");
+
+        String segundaRespuesta = mockMvc.perform(post("/api/reservas/{reservationProcessId}/cancel", reservationProcessId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason": "Otro motivo, no deberia aplicarse"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELADA"))
+                .andReturn().getResponse().getContentAsString();
+        String cancelledAtSegundo = JsonPath.read(segundaRespuesta, "$.cancelledAt");
+
+        assertThat(cancelledAtSegundo).isEqualTo(cancelledAtPrimero);
+    }
+
+    @Test
+    @DisplayName("duplicados: reenviar el mismo AppointmentCancelled no cambia el estado")
+    void duplicadosReenviarElMismoAppointmentCancelledNoCambiaElEstado() throws Exception {
+        String token = tokenPara("usuario.propietario");
+        String[] ids = crearYConfirmarReserva(token, 7301L);
+        String holdId = ids[0];
+        String reservationProcessId = ids[1];
+
+        String eventId = siguienteEventId("cancellation");
+        publicarEnAcciones(reservationProcessId,
+                appointmentCancelled(eventId, reservationProcessId, holdId, "Cambio solicitado por el usuario"));
+        esperarEstado(holdId, token, "CANCELADA");
+
+        ProcesoReserva procesoTrasPrimerEvento =
+                procesoReservaRepositoryPort.buscarPorReservationProcessId(reservationProcessId).orElseThrow();
+        Instant cancelledAtPrimero = procesoTrasPrimerEvento.getCancelledAt();
+        String motivoPrimero = procesoTrasPrimerEvento.getCancelReason();
+
+        // Mismo eventId: el consumidor tiene que reconocerlo como ya procesado (#20) y no reaplicar el efecto.
+        publicarEnAcciones(reservationProcessId,
+                appointmentCancelled(eventId, reservationProcessId, holdId, "Motivo distinto, no deberia aplicarse"));
+        darTiempoAlConsumidor();
+
+        ProcesoReserva procesoTrasDuplicado =
+                procesoReservaRepositoryPort.buscarPorReservationProcessId(reservationProcessId).orElseThrow();
+        assertThat(procesoTrasDuplicado.getEstado()).isEqualTo(EstadoProcesoReserva.CANCELADA);
+        assertThat(procesoTrasDuplicado.getCancelledAt()).isEqualTo(cancelledAtPrimero);
+        assertThat(procesoTrasDuplicado.getCancelReason()).isEqualTo(motivoPrimero);
+    }
+
+    @Test
+    @DisplayName("reinicio: los procesos pendientes quedan coherentes y no se duplica la reserva")
+    void reinicioLosProcesosPendientesQuedanCoherentesYNoDuplicanLaReserva() throws Exception {
+        String token = tokenPara("usuario.propietario");
+        // Simula un proceso interrumpido antes de confirmar (#37: todavia no hay nada que reconciliar).
+        String[] ids = crearHold(token);
+        String holdId = ids[0];
+        String reservationProcessId = ids[1];
+        int holdsAntesDeRecuperar = CONTADOR_HOLDS.get();
+
+        // La misma logica que corre al reiniciar el servicio (RecuperacionArranqueListener en produccion).
+        reservasService.recuperarProcesosPendientes();
+
+        assertThat(CONTADOR_HOLDS.get()).isEqualTo(holdsAntesDeRecuperar);
+        assertThat((String) JsonPath.read(estadoActual(holdId, token), "$.status")).isEqualTo("HOLD_CREADO");
+
+        // El proceso recuperado sigue siendo utilizable, con el mismo holdId/reservationProcessId: sin duplicar.
+        confirmarHold(holdId, token);
+        publicarEnAcciones(reservationProcessId,
+                additionalInformationRequested(siguienteEventId("request"), reservationProcessId, holdId));
+        esperarEstado(holdId, token, "ESPERANDO_TELEFONO");
+        enviarTelefono(holdId, token, TELEFONO_VALIDO);
+        publicarEnAcciones(reservationProcessId,
+                appointmentConfirmed(siguienteEventId("confirmation"), reservationProcessId, holdId, 7401L));
+
+        String cuerpoFinal = esperarEstado(holdId, token, "CONFIRMADA");
+        assertThat(reservationIdDe(cuerpoFinal)).isEqualTo(7401L);
+        assertThat(CONTADOR_HOLDS.get()).isEqualTo(holdsAntesDeRecuperar);
+    }
+
+    @Test
+    @DisplayName("vencimiento: un proceso cerrado por el cierre periodico de vencidos rechaza confirmaciones posteriores")
+    void vencimientoUnProcesoCerradoPorElCierrePeriodicoRechazaConfirmacionesPosteriores() throws Exception {
+        String token = tokenPara("usuario.propietario");
+        String[] ids = crearHold(token);
+        String holdId = ids[0];
+
+        ProcesoReserva proceso = procesoReservaRepositoryPort.buscarPorHoldId(holdId).orElseThrow();
+        proceso.setExpiresAt(Instant.now().minusSeconds(60));
+        procesoReservaRepositoryPort.guardar(proceso);
+
+        // La misma logica que corre periodicamente (CierreVencidosScheduler en produccion).
+        reservasService.cerrarProcesosVencidos();
+
+        assertThat((String) JsonPath.read(estadoActual(holdId, token), "$.status")).isEqualTo("VENCIDA");
+
+        mockMvc.perform(post("/api/holds/{holdId}/confirm", holdId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"patientFirstName": "Juan", "patientLastName": "Perez"}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RESERVATION_PROCESS_INVALID_STATE"));
     }
 
 }

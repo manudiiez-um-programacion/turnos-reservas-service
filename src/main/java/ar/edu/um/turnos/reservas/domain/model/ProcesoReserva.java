@@ -43,6 +43,14 @@ public class ProcesoReserva {
     /** Usuario final dueño del proceso (§4.2): nunca se confia en un id que venga del cliente. */
     private Long usuarioId;
 
+    /**
+     * {@code externalPatientId} con el que este proceso se identifica ante
+     * la catedra (#27). Se persiste para poder reconciliar (#36) sin una
+     * sesion HTTP activa, como al recuperar procesos pendientes al arrancar
+     * el servicio (#37).
+     */
+    private String externalPatientId;
+
     private Long professionalId;
 
     private String professionalNombreHistorico;

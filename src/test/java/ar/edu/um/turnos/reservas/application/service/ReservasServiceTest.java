@@ -21,12 +21,14 @@ import ar.edu.um.turnos.reservas.domain.model.SolicitudConfirmacionHold;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudEnvioTelefono;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudHold;
 import ar.edu.um.turnos.reservas.domain.ports.in.CancelarReservaUseCase;
+import ar.edu.um.turnos.reservas.domain.ports.in.CerrarProcesosVencidosUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConfirmarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ConsultarReservasUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.CrearHoldUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.EnviarTelefonoUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.ProcesarEventoAccionUseCase;
+import ar.edu.um.turnos.reservas.domain.ports.in.RecuperarProcesosPendientesUseCase;
 import ar.edu.um.turnos.reservas.domain.ports.in.TransicionarProcesoReservaUseCase;
 
 @ExtendWith(MockitoExtension.class)
@@ -56,10 +58,16 @@ class ReservasServiceTest {
     @Mock
     private CancelarReservaUseCase cancelarReservaUseCase;
 
+    @Mock
+    private RecuperarProcesosPendientesUseCase recuperarProcesosPendientesUseCase;
+
+    @Mock
+    private CerrarProcesosVencidosUseCase cerrarProcesosVencidosUseCase;
+
     private ReservasService crearService() {
         return new ReservasService(procesarEventoAccionUseCase, transicionarProcesoReservaUseCase, crearHoldUseCase,
                 confirmarHoldUseCase, consultarHoldUseCase, enviarTelefonoUseCase, consultarReservasUseCase,
-                cancelarReservaUseCase);
+                cancelarReservaUseCase, recuperarProcesosPendientesUseCase, cerrarProcesosVencidosUseCase);
     }
 
     @Test
@@ -141,6 +149,23 @@ class ReservasServiceTest {
         when(cancelarReservaUseCase.cancelar(solicitud)).thenReturn(esperado);
 
         assertThat(service.cancelarReserva(solicitud)).isSameAs(esperado);
+    }
+
+    @Test
+    void delegaEnElCasoDeUsoDeRecuperarProcesosPendientes() {
+        ReservasService service = crearService();
+
+        service.recuperarProcesosPendientes();
+
+        verify(recuperarProcesosPendientesUseCase).recuperar();
+    }
+
+    @Test
+    void delegaEnElCasoDeUsoDeCerrarProcesosVencidos() {
+        ReservasService service = crearService();
+        when(cerrarProcesosVencidosUseCase.cerrarVencidos()).thenReturn(3);
+
+        assertThat(service.cerrarProcesosVencidos()).isEqualTo(3);
     }
 
 }

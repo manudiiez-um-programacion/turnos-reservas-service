@@ -10,7 +10,10 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Optional;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.ResourceAccessException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import ar.edu.um.turnos.config.catedra.exception.CatedraServerErrorException;
 import ar.edu.um.turnos.reservas.application.exception.ProcesoReservaAjenoException;
 import ar.edu.um.turnos.reservas.application.exception.ReservaNoCancelableException;
 import ar.edu.um.turnos.reservas.application.exception.ReservaNoEncontradaException;
@@ -26,9 +30,13 @@ import ar.edu.um.turnos.reservas.application.exception.ReservaOwnerMismatchExcep
 import ar.edu.um.turnos.reservas.domain.model.CancelacionReservaCatedra;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
+import ar.edu.um.turnos.reservas.domain.model.ReservaCatedraEncontrada;
 import ar.edu.um.turnos.reservas.domain.model.SolicitudCancelacionReserva;
 import ar.edu.um.turnos.reservas.domain.ports.out.CancelarReservaCatedraPort;
+import ar.edu.um.turnos.reservas.domain.ports.out.ConsultarReservaCatedraPort;
 import ar.edu.um.turnos.reservas.domain.ports.out.ProcesoReservaRepositoryPort;
+
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CancelarReservaUseCaseImpl")
@@ -40,6 +48,9 @@ class CancelarReservaUseCaseImplTest {
     @Mock
     private CancelarReservaCatedraPort cancelarReservaCatedraPort;
 
+    @Mock
+    private ConsultarReservaCatedraPort consultarReservaCatedraPort;
+
     private final TransicionarProcesoReservaUseCaseImpl transicionarProcesoReservaUseCase =
             new TransicionarProcesoReservaUseCaseImpl();
 
@@ -48,13 +59,14 @@ class CancelarReservaUseCaseImplTest {
     private final SolicitudCancelacionReserva solicitud = SolicitudCancelacionReserva.builder()
             .reservationProcessId("process-a92b47d0")
             .usuarioId(7L)
+            .externalPatientId("user-42")
             .reason("Cambio solicitado por el usuario")
             .build();
 
     @BeforeEach
     void setUp() {
         useCase = new CancelarReservaUseCaseImpl(
-                procesoReservaRepositoryPort, cancelarReservaCatedraPort, transicionarProcesoReservaUseCase);
+                procesoReservaRepositoryPort, cancelarReservaCatedraPort, consultarReservaCatedraPort, transicionarProcesoReservaUseCase);
     }
 
     private ProcesoReserva procesoDePrueba(EstadoProcesoReserva estado) {
@@ -182,6 +194,65 @@ class CancelarReservaUseCaseImplTest {
         assertThatThrownBy(() -> useCase.cancelar(solicitud)).isInstanceOf(ReservaNoCancelableException.class);
 
         assertThat(proceso.getEstado()).isEqualTo(EstadoProcesoReserva.CONFIRMADA);
+    }
+
+    @Test
+    @DisplayName("timeout cancelando: si la catedra ya la tenia CANCELLED, se alinea sin reintentar")
+    void timeoutCancelandoLaCatedraYaLaTeniaCancelada() {
+        ProcesoReserva proceso = procesoDePrueba(EstadoProcesoReserva.CONFIRMADA);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+        when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+        when(cancelarReservaCatedraPort.cancelar(proceso, "Cambio solicitado por el usuario"))
+                .thenThrow(new ResourceAccessException("timeout de lectura"));
+        Instant cancelledAtCatedra = Instant.parse("2026-09-11T15:10:00Z");
+        when(consultarReservaCatedraPort.buscarPorReservationProcessId("user-42", "process-a92b47d0"))
+                .thenReturn(Optional.of(new ReservaCatedraEncontrada(8251L, "CANCELLED", cancelledAtCatedra, "otro motivo")));
+
+        ProcesoReserva resultado = useCase.cancelar(solicitud);
+
+        assertThat(resultado.getEstado()).isEqualTo(EstadoProcesoReserva.CANCELADA);
+        assertThat(resultado.getCancelledAt()).isEqualTo(cancelledAtCatedra);
+        assertThat(resultado.getCancelReason()).isEqualTo("otro motivo");
+        verify(cancelarReservaCatedraPort, times(1)).cancelar(any(), any());
+    }
+
+    @Test
+    @DisplayName("timeout cancelando: si la catedra todavia la tiene CONFIRMED, se reintenta una vez")
+    void timeoutCancelandoLaCatedraTodaviaNoLaCancelo() {
+        ProcesoReserva proceso = procesoDePrueba(EstadoProcesoReserva.CONFIRMADA);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+        when(procesoReservaRepositoryPort.guardar(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
+        Instant cancelledAt = Instant.parse("2026-09-11T15:10:00Z");
+        when(cancelarReservaCatedraPort.cancelar(proceso, "Cambio solicitado por el usuario"))
+                .thenThrow(new CatedraServerErrorException(HttpStatus.SERVICE_UNAVAILABLE, null, null, List.of()))
+                .thenReturn(new CancelacionReservaCatedra(8251L, "CANCELLED", cancelledAt));
+        when(consultarReservaCatedraPort.buscarPorReservationProcessId("user-42", "process-a92b47d0"))
+                .thenReturn(Optional.of(new ReservaCatedraEncontrada(8251L, "CONFIRMED", null, null)));
+
+        ProcesoReserva resultado = useCase.cancelar(solicitud);
+
+        assertThat(resultado.getEstado()).isEqualTo(EstadoProcesoReserva.CANCELADA);
+        assertThat(resultado.getCancelledAt()).isEqualTo(cancelledAt);
+        verify(cancelarReservaCatedraPort, times(2)).cancelar(any(), any());
+    }
+
+    @Test
+    @DisplayName("timeout cancelando y el reintento tambien da timeout: se propaga sin insistir mas")
+    void timeoutCancelandoYElReintentoTambienDaTimeout() {
+        ProcesoReserva proceso = procesoDePrueba(EstadoProcesoReserva.CONFIRMADA);
+        when(procesoReservaRepositoryPort.buscarPorReservationProcessId("process-a92b47d0"))
+                .thenReturn(Optional.of(proceso));
+        when(cancelarReservaCatedraPort.cancelar(proceso, "Cambio solicitado por el usuario"))
+                .thenThrow(new ResourceAccessException("timeout 1"))
+                .thenThrow(new ResourceAccessException("timeout 2"));
+        when(consultarReservaCatedraPort.buscarPorReservationProcessId("user-42", "process-a92b47d0"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.cancelar(solicitud)).isInstanceOf(ResourceAccessException.class);
+
+        verify(cancelarReservaCatedraPort, times(2)).cancelar(any(), any());
     }
 
 }
