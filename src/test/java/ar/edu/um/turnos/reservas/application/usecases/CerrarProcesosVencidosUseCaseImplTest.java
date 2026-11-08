@@ -19,7 +19,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import ar.edu.um.turnos.config.VencimientoProperties;
+import ar.edu.um.turnos.config.observabilidad.MetricasObservabilidad;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.ports.out.ProcesoReservaRepositoryPort;
@@ -34,13 +37,16 @@ class CerrarProcesosVencidosUseCaseImplTest {
     private final TransicionarProcesoReservaUseCaseImpl transicionarProcesoReservaUseCase =
             new TransicionarProcesoReservaUseCaseImpl();
 
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    private final MetricasObservabilidad metricas = new MetricasObservabilidad(registry);
+
     private CerrarProcesosVencidosUseCaseImpl useCase;
 
     @BeforeEach
     void setUp() {
         VencimientoProperties vencimientoProperties = new VencimientoProperties(Duration.ofSeconds(5), Duration.ofSeconds(30));
         useCase = new CerrarProcesosVencidosUseCaseImpl(
-                procesoReservaRepositoryPort, transicionarProcesoReservaUseCase, vencimientoProperties);
+                procesoReservaRepositoryPort, transicionarProcesoReservaUseCase, vencimientoProperties, metricas);
     }
 
     private ProcesoReserva procesoDePrueba(String reservationProcessId, EstadoProcesoReserva estado, Instant expiresAt) {
@@ -74,6 +80,8 @@ class CerrarProcesosVencidosUseCaseImplTest {
         assertThat(vigente.getEstado()).isEqualTo(EstadoProcesoReserva.ESPERANDO_TELEFONO);
         verify(procesoReservaRepositoryPort).guardar(vencido);
         verify(procesoReservaRepositoryPort, never()).guardar(vigente);
+        // #40: un proceso vencido cerrado, no dos: el vigente no cuenta.
+        assertThat(registry.get("turnos.reservas.procesos.vencidos").counter().count()).isEqualTo(1.0);
     }
 
     @Test

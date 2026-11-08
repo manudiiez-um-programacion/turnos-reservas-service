@@ -17,6 +17,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
+import ar.edu.um.turnos.config.observabilidad.MetricasObservabilidad;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.EventoAccionReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
@@ -38,12 +41,15 @@ class ProcesarEventoAccionUseCaseImplTest {
     private final TransicionarProcesoReservaUseCase transicionarProcesoReservaUseCase =
             new TransicionarProcesoReservaUseCaseImpl();
 
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    private final MetricasObservabilidad metricas = new MetricasObservabilidad(registry);
+
     private ProcesarEventoAccionUseCaseImpl useCase;
 
     @BeforeEach
     void setUp() {
         useCase = new ProcesarEventoAccionUseCaseImpl(
-                registrarEventoProcesadoPort, procesoReservaRepositoryPort, transicionarProcesoReservaUseCase);
+                registrarEventoProcesadoPort, procesoReservaRepositoryPort, transicionarProcesoReservaUseCase, metricas);
     }
 
     private EventoAccionReserva.EventoAccionReservaBuilder eventoValido() {
@@ -84,6 +90,17 @@ class ProcesarEventoAccionUseCaseImplTest {
         assertThatCode(() -> useCase.procesar(evento)).doesNotThrowAnyException();
 
         verify(registrarEventoProcesadoPort).intentarRegistrar(evento);
+    }
+
+    @Test
+    @DisplayName("#40: un eventId ya procesado cuenta como evento duplicado descartado")
+    void unEventoYaProcesadoCuentaComoDuplicadoDescartado() {
+        EventoAccionReserva evento = eventoValido().build();
+        when(registrarEventoProcesadoPort.intentarRegistrar(evento)).thenReturn(false);
+
+        useCase.procesar(evento);
+
+        assertThat(registry.get("turnos.reservas.eventos.duplicados").counter().count()).isEqualTo(1.0);
     }
 
     @Test
