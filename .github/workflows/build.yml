@@ -1,9 +1,13 @@
 # Verificacion automatica de cada cambio: compila y corre las pruebas.
 #
-# No necesita ningun secreto de la catedra. Las pruebas de este repo no hablan
-# con el servicio central ni con PostgreSQL: el servicio esta configurado para
-# levantar sin base (ver application.properties) y la integracion real se cubre
-# con dobles o queda excluida.
+# No necesita ningun secreto de la catedra. La mayoria de las pruebas de este
+# repo no hablan con el servicio central ni con PostgreSQL: el servicio esta
+# configurado para levantar sin base (ver application.properties) y la
+# integracion real se cubre con dobles. La excepcion es la suite de #41
+# (src/test/java/.../e2e/*IT.java, perfil Maven 'e2e'), que corre contra
+# PostgreSQL y Kafka reales con Testcontainers: tampoco necesita secretos (la
+# catedra se simula igual que en el resto de la suite), solo Docker, que los
+# runners de ubuntu-latest ya traen.
 #
 # El check es informativo: el ruleset de las ramas protegidas lo administra la
 # catedra y este repo no toca su configuracion, asi que no hay status checks
@@ -56,6 +60,12 @@ jobs:
       - name: Compilar y correr las pruebas
         run: ./mvnw -B verify
 
+      # Reusa las clases que ya compilo el 'verify' de arriba en el mismo
+      # workspace: invoca los goals de Failsafe directo, sin pasar otra vez
+      # por todo el ciclo de vida (que volveria a correr Surefire). #41.
+      - name: Correr la suite de Testcontainers (PostgreSQL y Kafka reales)
+        run: ./mvnw -B -Pe2e failsafe:integration-test failsafe:verify
+
       # El analisis es opcional a proposito: quien clone el repo sin la cuenta de
       # SonarCloud tiene que poder buildear igual, en verde. Si falta el secret se
       # omite con un aviso en lugar de fallar.
@@ -97,7 +107,9 @@ jobs:
 
           tests = failures = errors = skipped = 0
           clases = []
-          for f in sorted(glob.glob('target/surefire-reports/TEST-*.xml')):
+          reportes = sorted(glob.glob('target/surefire-reports/TEST-*.xml'))
+          reportes += sorted(glob.glob('target/failsafe-reports/TEST-*.xml'))
+          for f in reportes:
               r = ET.parse(f).getroot()
               t = int(r.get('tests', 0))
               fa = int(r.get('failures', 0))
@@ -154,6 +166,7 @@ jobs:
           name: reportes-de-pruebas
           path: |
             target/surefire-reports/
+            target/failsafe-reports/
             target/site/jacoco/
           if-no-files-found: ignore
           retention-days: 14
