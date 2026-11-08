@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 import ar.edu.um.turnos.config.VencimientoProperties;
+import ar.edu.um.turnos.config.observabilidad.MetricasObservabilidad;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.ports.in.CerrarProcesosVencidosUseCase;
@@ -44,6 +45,7 @@ public class CerrarProcesosVencidosUseCaseImpl implements CerrarProcesosVencidos
     private final ProcesoReservaRepositoryPort procesoReservaRepositoryPort;
     private final TransicionarProcesoReservaUseCase transicionarProcesoReservaUseCase;
     private final VencimientoProperties vencimientoProperties;
+    private final MetricasObservabilidad metricas;
 
     @Override
     public int cerrarVencidos() {
@@ -67,6 +69,7 @@ public class CerrarProcesosVencidosUseCaseImpl implements CerrarProcesosVencidos
     private void cerrarComoVencido(ProcesoReserva proceso) {
         ProcesoReserva cerrado = transicionarProcesoReservaUseCase.transicionar(proceso, EstadoProcesoReserva.VENCIDA, Instant.now());
         procesoReservaRepositoryPort.guardar(cerrado);
+        metricas.procesoVencidoCerrado();
         log.info("Proceso {} vencido (expiraba {}): cerrado como VENCIDA",
                 proceso.getReservationProcessId(), proceso.getExpiresAt());
     }

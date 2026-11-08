@@ -34,6 +34,8 @@ import ar.edu.um.turnos.config.catedra.exception.CatedraErrorCode;
 import ar.edu.um.turnos.config.catedra.exception.CatedraFieldError;
 import ar.edu.um.turnos.config.catedra.exception.CatedraHttpException;
 import ar.edu.um.turnos.config.catedra.exception.CatedraServerErrorException;
+import ar.edu.um.turnos.config.observabilidad.Integracion;
+import ar.edu.um.turnos.config.observabilidad.MetricasObservabilidad;
 
 /**
  * Cliente tipado hacia los cinco endpoints REST que este servicio consume
@@ -61,6 +63,13 @@ import ar.edu.um.turnos.config.catedra.exception.CatedraServerErrorException;
  * eso no lo traduce. Un {@code code} que llega pero no esta en
  * {@link CatedraErrorCode} queda en {@code DESCONOCIDO} y se registra: no
  * rompe el cliente, pero avisa que la referencia cambio.
+ *
+ * <p>Cada llamada real (exito, reintento o fallo definitivo) se registra en
+ * {@link MetricasObservabilidad} (#40): alimenta los contadores de
+ * reintentos/fallos de integracion y el ultimo estado conocido que lee
+ * {@code /api/health} sin generar trafico nuevo hacia la catedra. Un error
+ * funcional (4xx) no cuenta como fallo de integracion: la catedra respondio,
+ * solo que la operacion no era valida.
  */
 @Slf4j
 @Component
@@ -71,6 +80,7 @@ public class CatedraClient {
 
     private final RestClient catedraRestClient;
     private final CatedraProperties catedraProperties;
+    private final MetricasObservabilidad metricas;
 
     public OcupacionesResponse obtenerOcupaciones(Long professionalId, LocalDate from, LocalDate to) {
         return conReintentos("obtener ocupaciones", () -> ejecutar(() -> catedraRestClient.get()
@@ -84,19 +94,19 @@ public class CatedraClient {
     }
 
     public HoldResponse crearHold(CrearHoldRequest request) {
-        return ejecutar(() -> catedraRestClient.post()
+        return conEstado(() -> ejecutar(() -> catedraRestClient.post()
                 .uri("/api/appointment-holds")
                 .body(request)
                 .retrieve()
-                .body(HoldResponse.class));
+                .body(HoldResponse.class)));
     }
 
     public ConfirmacionHoldResponse confirmarHold(String holdId, ConfirmarHoldRequest request) {
-        return ejecutar(() -> catedraRestClient.post()
+        return conEstado(() -> ejecutar(() -> catedraRestClient.post()
                 .uri("/api/appointment-holds/{holdId}/confirm", holdId)
                 .body(request)
                 .retrieve()
-                .body(ConfirmacionHoldResponse.class));
+                .body(ConfirmacionHoldResponse.class)));
     }
 
     public ListarReservasResponse listarReservas(ListarReservasFiltro filtro) {
@@ -111,11 +121,11 @@ public class CatedraClient {
     }
 
     public CancelacionReservaResponse cancelarReserva(String reservationProcessId, String reason) {
-        return ejecutar(() -> catedraRestClient.post()
+        return conEstado(() -> ejecutar(() -> catedraRestClient.post()
                 .uri("/api/appointments/{reservationProcessId}/cancel", reservationProcessId)
                 .body(new CancelarReservaRequest(reason))
                 .retrieve()
-                .body(CancelacionReservaResponse.class));
+                .body(CancelacionReservaResponse.class)));
     }
 
     private URI construirUriListado(UriBuilder uriBuilder, ListarReservasFiltro filtro) {
@@ -166,6 +176,25 @@ public class CatedraClient {
     }
 
     /**
+     * Para las operaciones con efectos que no se reintentan (#36): un fallo de
+     * infraestructura o de red es un fallo de integracion real aunque esta
+     * clase no lo reintente aca, asi que se registra igual en
+     * {@link MetricasObservabilidad}. Un {@link CatedraClientErrorException}
+     * (4xx) no pasa por aca: la catedra respondio, no es un fallo de
+     * integracion.
+     */
+    private <T> T conEstado(Supplier<T> llamada) {
+        try {
+            T resultado = llamada.get();
+            metricas.exitoIntegracion(Integracion.CATEDRA);
+            return resultado;
+        } catch (CatedraServerErrorException | ResourceAccessException fallo) {
+            metricas.falloIntegracion(Integracion.CATEDRA);
+            throw fallo;
+        }
+    }
+
+    /**
      * Reintenta, con backoff exponencial, solo ante un error de
      * infraestructura ({@link CatedraServerErrorException}) o de red
      * ({@link ResourceAccessException} — timeout o conexion rechazada). Un
@@ -177,14 +206,18 @@ public class CatedraClient {
         int intento = 0;
         while (true) {
             try {
-                return llamada.get();
+                T resultado = llamada.get();
+                metricas.exitoIntegracion(Integracion.CATEDRA);
+                return resultado;
             } catch (CatedraServerErrorException | ResourceAccessException fallo) {
                 intento++;
                 if (intento > configuracion.maxRetries()) {
+                    metricas.falloIntegracion(Integracion.CATEDRA);
                     log.warn("Agotados los reintentos hacia la catedra en '{}' tras {} intento(s): {}",
                             operacion, intento, fallo.getMessage());
                     throw fallo;
                 }
+                metricas.reintentoIntegracion(Integracion.CATEDRA);
                 Duration espera = configuracion.retryBackoff().multipliedBy(1L << (intento - 1));
                 log.warn("Reintentando '{}' hacia la catedra (intento {}/{}, espera {}): {}",
                         operacion, intento, configuracion.maxRetries(), espera, fallo.getMessage());

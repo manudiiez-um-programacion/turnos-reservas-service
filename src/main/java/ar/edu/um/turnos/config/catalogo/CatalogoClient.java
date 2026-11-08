@@ -18,6 +18,8 @@ import ar.edu.um.turnos.config.catalogo.exception.CatalogoErrorCode;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoHttpException;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoNoDisponibleException;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoServerErrorException;
+import ar.edu.um.turnos.config.observabilidad.Integracion;
+import ar.edu.um.turnos.config.observabilidad.MetricasObservabilidad;
 
 /**
  * Cliente tipado hacia la agenda vigente del servicio de catalogo (#16,
@@ -36,6 +38,11 @@ import ar.edu.um.turnos.config.catalogo.exception.CatalogoServerErrorException;
  * backoff exponencial hasta {@code catalogo.api.max-retries} veces. Un
  * {@link CatalogoClientErrorException} (401/403/404/409) nunca se reintenta:
  * repetir la misma consulta no cambia un error funcional.
+ *
+ * <p>Cada llamada real se registra en {@link MetricasObservabilidad} (#40):
+ * alimenta los contadores de reintentos/fallos de integracion y el ultimo
+ * estado conocido que lee {@code /api/health} sin generar trafico nuevo hacia
+ * el catalogo.
  */
 @Slf4j
 @Component
@@ -46,6 +53,7 @@ public class CatalogoClient {
 
     private final RestClient catalogoRestClient;
     private final CatalogoProperties catalogoProperties;
+    private final MetricasObservabilidad metricas;
 
     public AgendaProfesionalResponse obtenerAgendaVigente(Long professionalId) {
         return conReintentos(() -> ejecutar(() -> catalogoRestClient.get()
@@ -77,15 +85,19 @@ public class CatalogoClient {
         int intento = 0;
         while (true) {
             try {
-                return llamada.get();
+                T resultado = llamada.get();
+                metricas.exitoIntegracion(Integracion.CATALOGO);
+                return resultado;
             } catch (CatalogoServerErrorException | ResourceAccessException fallo) {
                 intento++;
                 if (intento > catalogoProperties.maxRetries()) {
+                    metricas.falloIntegracion(Integracion.CATALOGO);
                     log.warn("Agotados los reintentos hacia el catalogo tras {} intento(s): {}",
                             intento, fallo.getMessage());
                     throw new CatalogoNoDisponibleException(
                             "El catalogo no respondio tras agotar los reintentos", fallo);
                 }
+                metricas.reintentoIntegracion(Integracion.CATALOGO);
                 Duration espera = catalogoProperties.retryBackoff().multipliedBy(1L << (intento - 1));
                 log.warn("Reintentando la agenda vigente del catalogo (intento {}/{}, espera {}): {}",
                         intento, catalogoProperties.maxRetries(), espera, fallo.getMessage());

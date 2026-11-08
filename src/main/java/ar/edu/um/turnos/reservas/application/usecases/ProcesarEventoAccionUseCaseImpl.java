@@ -5,6 +5,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import ar.edu.um.turnos.config.observabilidad.MetricasObservabilidad;
 import ar.edu.um.turnos.reservas.domain.model.EstadoProcesoReserva;
 import ar.edu.um.turnos.reservas.domain.model.EventoAccionReserva;
 import ar.edu.um.turnos.reservas.domain.model.ProcesoReserva;
@@ -53,6 +54,7 @@ public class ProcesarEventoAccionUseCaseImpl implements ProcesarEventoAccionUseC
     private final RegistrarEventoProcesadoPort registrarEventoProcesadoPort;
     private final ProcesoReservaRepositoryPort procesoReservaRepositoryPort;
     private final TransicionarProcesoReservaUseCase transicionarProcesoReservaUseCase;
+    private final MetricasObservabilidad metricas;
 
     @Override
     @Transactional
@@ -71,6 +73,7 @@ public class ProcesarEventoAccionUseCaseImpl implements ProcesarEventoAccionUseC
         }
 
         if (!registrarEventoProcesadoPort.intentarRegistrar(evento)) {
+            metricas.eventoDuplicadoDescartado();
             log.info("Evento {} con eventId {} ya fue procesado: se descarta sin repetir su efecto "
                             + "(reservationProcessId={})",
                     evento.getTipo(), evento.getEventId(), evento.getReservationProcessId());

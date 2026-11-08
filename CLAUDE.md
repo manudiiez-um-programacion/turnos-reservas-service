@@ -308,6 +308,32 @@ que rotarlo.
   La lógica propia de cada tipo de evento (`TipoEventoAccion`) queda para los casos de
   uso que la implementan (#29, #31, #35); este consumidor solo garantiza la
   recepción, el despacho y el commit del offset.
+- **Observabilidad y estado de dependencias** (#40): va el starter
+  `spring-boot-starter-actuator` solo por el `MeterRegistry` de Micrometer que
+  autoconfigura — mismo patrón que Flyway y Kafka arriba, usar el starter en
+  vez de la librería suelta — y no por sus endpoints: `management.endpoints.enabled-by-default=false`
+  los apaga a todos, así que `/api/health` del slice `health` sigue siendo el
+  único endpoint de salud expuesto y no hay que decidir si proteger
+  `/actuator/**` con `SecurityConfig`. Los contadores (`turnos.integracion.reintentos`,
+  `turnos.integracion.fallos`, `turnos.reservas.eventos.duplicados`,
+  `turnos.reservas.procesos.vencidos`) y el último estado conocido de la
+  cátedra y el catálogo viven en un componente transversal,
+  `ar.edu.um.turnos.config.observabilidad.MetricasObservabilidad`, inyectado
+  directo en `CatedraClient`, `CatalogoClient` y los casos de uso que
+  descartan duplicados o cierran vencidos — igual que `@Slf4j`, es un
+  cross-cutting técnico y no amerita un puerto de dominio propio.
+  `/api/health` combina dos estrategias distintas a propósito: la base de
+  datos se verifica **activa** en cada consulta (es local, de bajo costo, y
+  `spring.datasource.hikari.connection-timeout` la acota a 5 s en producción
+  y 300 ms en el perfil de pruebas para que una base caída no cuelgue la
+  respuesta); la cátedra y el catálogo se leen **pasivos**, por el último
+  resultado real que ya informó `MetricasObservabilidad`, sin generar
+  tráfico nuevo hacia ellos solo por un healthcheck que `compose.yaml` puede
+  llamar cada pocos segundos. El estado agregado sigue la regla del §3: la
+  base caída es `DOWN` (nada puede operar sin ella, responde 503); la cátedra
+  o el catálogo caídos con la base arriba son `DEGRADADO` (las operaciones
+  que dependen solo de datos propios siguen atendiéndose, responde 200); un
+  estado `DESCONOCIDO` (todavía sin ninguna llamada real) no degrada nada.
 
 ### Todavía abiertas
 

@@ -158,6 +158,20 @@
             <artifactId>spring-boot-starter-kafka</artifactId>
         </dependency>
 
+        <!--
+          Observabilidad (#40): va el STARTER solo por el MeterRegistry de
+          Micrometer que autoconfigura (los contadores de reintentos,
+          duplicados descartados, vencidos cerrados y fallos de integracion),
+          no por los endpoints de Actuator. management.endpoints.enabled-by-default=false
+          en application.properties los apaga a todos: /api/health del slice
+          health sigue siendo el unico endpoint de salud, nada de superficie
+          nueva sin asegurar con el ruleset de SecurityConfig.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- Documentacion de la API: Swagger UI. -->
         <dependency>
             <groupId>org.springdoc</groupId>

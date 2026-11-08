@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sun.net.httpserver.HttpServer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -24,6 +25,9 @@ import ar.edu.um.turnos.config.catalogo.exception.CatalogoClientErrorException;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoErrorCode;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoNoDisponibleException;
 import ar.edu.um.turnos.config.catalogo.exception.CatalogoServerErrorException;
+import ar.edu.um.turnos.config.observabilidad.EstadoIntegracion;
+import ar.edu.um.turnos.config.observabilidad.Integracion;
+import ar.edu.um.turnos.config.observabilidad.MetricasObservabilidad;
 
 /**
  * Cubre {@code obtenerAgendaVigente} de {@link CatalogoClient} contra un
@@ -50,6 +54,8 @@ class CatalogoClientTest {
         servidorFalso.stop(0);
     }
 
+    private final MetricasObservabilidad metricas = new MetricasObservabilidad(new SimpleMeterRegistry());
+
     private CatalogoClient clienteCon(int maxRetries) {
         CatalogoProperties catalogoProperties = new CatalogoProperties(
                 "http://localhost:" + servidorFalso.getAddress().getPort(),
@@ -70,7 +76,7 @@ class CatalogoClientTest {
                 .requestInterceptor(interceptor)
                 .build();
 
-        return new CatalogoClient(restClient, catalogoProperties);
+        return new CatalogoClient(restClient, catalogoProperties, metricas);
     }
 
     @Test
@@ -230,6 +236,41 @@ class CatalogoClientTest {
         assertThatThrownBy(() -> cliente.obtenerAgendaVigente(42L))
                 .isInstanceOf(CatalogoNoDisponibleException.class)
                 .hasCauseInstanceOf(ResourceAccessException.class);
+    }
+
+    @Test
+    @DisplayName("#40: una consulta exitosa marca el catalogo como disponible en MetricasObservabilidad")
+    void unaConsultaExitosaMarcaElCatalogoComoDisponible() {
+        servidorFalso.createContext("/api/internal/professionals/42/agenda", exchange -> responder(exchange, 200, """
+                {
+                  "professional": {"id": 42, "categoryId": 7, "firstName": "Ana", "lastName": "Gomez", "enabled": true},
+                  "schedules": [],
+                  "catalogVersion": {"version": 128, "appliedAt": "2026-10-27T18:30:00Z", "source": "SNAPSHOT"}
+                }
+                """));
+
+        clienteCon(0).obtenerAgendaVigente(42L);
+
+        EstadoIntegracion estado = metricas.estadoDe(Integracion.CATALOGO);
+        assertThat(estado.esConocido()).isTrue();
+        assertThat(estado.disponible()).isTrue();
+        assertThat(metricas.estadoDe(Integracion.CATEDRA).esConocido())
+                .as("no se toca el estado de la catedra, es una integracion distinta")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("#40: agotados los reintentos, el catalogo queda marcado como no disponible")
+    void agotadosLosReintentosElCatalogoQuedaNoDisponible() {
+        servidorFalso.createContext("/api/internal/professionals/42/agenda", exchange -> {
+            llamadasRecibidas.incrementAndGet();
+            responder(exchange, 503, "{}");
+        });
+
+        assertThatThrownBy(() -> clienteCon(2).obtenerAgendaVigente(42L))
+                .isInstanceOf(CatalogoNoDisponibleException.class);
+
+        assertThat(metricas.estadoDe(Integracion.CATALOGO).disponible()).isFalse();
     }
 
     private static void responder(com.sun.net.httpserver.HttpExchange exchange, int status, String cuerpoJson) throws java.io.IOException {
