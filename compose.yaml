@@ -136,10 +136,12 @@ services:
       # wget viene en busybox, que la imagen alpine ya trae: no hace falta
       # instalar nada en la imagen final solo para chequear salud.
       #
-      # OJO: /api/health responde por liveness, no verifica la base. Alcanza
-      # para saber que el proceso atiende HTTP, que es lo que compose
-      # necesita. Un health real con estado de dependencias llega en #40.
-      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8081/api/health | grep -q '\"estado\":\"UP\"'"]
+      # /api/health ya verifica la base, la catedra y el catalogo (#40). UP y
+      # DEGRADADO (catedra o catalogo caidos, con la base arriba) cuentan
+      # como "sano" para compose: el proceso sigue atendiendo las operaciones
+      # que dependen solo de datos propios (§3). Solo DOWN (base caida)
+      # responde 503, asi que wget ya falla sin necesitar el grep para ese caso.
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8081/api/health | grep -Eq '\"estado\":\"(UP|DEGRADADO)\"'"]
       interval: 10s
       timeout: 5s
       retries: 12
