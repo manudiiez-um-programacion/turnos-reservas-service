@@ -161,6 +161,34 @@ información descriptiva histórica —el nombre del profesional al momento de
 reservar—, pero como dato congelado de esa reserva, y nunca como catálogo para
 buscar ni para validar una reserva nueva.
 
+## Pruebas
+
+```bash
+./mvnw verify          # unitarias + de integracion con dobles (rapido, sin Docker)
+./mvnw verify -Pe2e     # + la suite de Testcontainers (#41), requiere Docker disponible
+```
+
+La mayoría de las pruebas usan dobles (servidores HTTP en memoria para la cátedra
+y el catálogo, un broker de Kafka embebido o fakes para la persistencia): corren
+con `./mvnw verify` sin pedir nada más y es lo que conviene iterar localmente.
+
+La excepción es `src/test/java/.../e2e/*IT.java`: la única suite que corre contra
+**PostgreSQL y Kafka reales** (con [Testcontainers](https://testcontainers.com/)),
+porque hay cosas que solo fallan ahí (de hecho encontró un desajuste de tipos
+entre una migración y una entidad JPA que ningún otro test había detectado nunca).
+Vive en un perfil Maven separado (`e2e`) para que el build rápido de todos los
+días no necesite Docker: Surefire ignora esas clases porque no terminan en
+`Test`/`Tests` (la convención de Failsafe), y el perfil `e2e` es lo único que
+agrega el plugin que sí las corre. Requisito previo: **Docker disponible** y
+corriendo (el mismo Docker que pide "Levantar el entorno local" más arriba);
+Testcontainers levanta y destruye los contenedores de Postgres y Kafka solo.
+No necesita ningún secreto de la cátedra: se simula con el mismo patrón que el
+resto de la suite.
+
+CI (`.github/workflows/build.yml`) corre las dos cosas en el mismo job: primero
+`./mvnw verify`, después `./mvnw -Pe2e failsafe:integration-test failsafe:verify`
+reusando las clases ya compiladas, contra el Docker que ya trae el runner.
+
 ## Configuración y secretos
 
 Nada sensible vive en el repositorio. Todo lo que es un secreto o depende del
