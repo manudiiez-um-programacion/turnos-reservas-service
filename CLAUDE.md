@@ -308,6 +308,52 @@ que rotarlo.
   La lógica propia de cada tipo de evento (`TipoEventoAccion`) queda para los casos de
   uso que la implementan (#29, #31, #35); este consumidor solo garantiza la
   recepción, el despacho y el commit del offset.
+- **Observabilidad y estado de dependencias** (#40): va el starter
+  `spring-boot-starter-actuator` solo por el `MeterRegistry` de Micrometer que
+  autoconfigura — mismo patrón que Flyway y Kafka arriba, usar el starter en
+  vez de la librería suelta — y no por sus endpoints: `management.endpoints.enabled-by-default=false`
+  los apaga a todos, así que `/api/health` del slice `health` sigue siendo el
+  único endpoint de salud expuesto y no hay que decidir si proteger
+  `/actuator/**` con `SecurityConfig`. Los contadores (`turnos.integracion.reintentos`,
+  `turnos.integracion.fallos`, `turnos.reservas.eventos.duplicados`,
+  `turnos.reservas.procesos.vencidos`) y el último estado conocido de la
+  cátedra y el catálogo viven en un componente transversal,
+  `ar.edu.um.turnos.config.observabilidad.MetricasObservabilidad`, inyectado
+  directo en `CatedraClient`, `CatalogoClient` y los casos de uso que
+  descartan duplicados o cierran vencidos — igual que `@Slf4j`, es un
+  cross-cutting técnico y no amerita un puerto de dominio propio.
+  `/api/health` combina dos estrategias distintas a propósito: la base de
+  datos se verifica **activa** en cada consulta (es local, de bajo costo, y
+  `spring.datasource.hikari.connection-timeout` la acota a 5 s en producción
+  y 300 ms en el perfil de pruebas para que una base caída no cuelgue la
+  respuesta); la cátedra y el catálogo se leen **pasivos**, por el último
+  resultado real que ya informó `MetricasObservabilidad`, sin generar
+  tráfico nuevo hacia ellos solo por un healthcheck que `compose.yaml` puede
+  llamar cada pocos segundos. El estado agregado sigue la regla del §3: la
+  base caída es `DOWN` (nada puede operar sin ella, responde 503); la cátedra
+  o el catálogo caídos con la base arriba son `DEGRADADO` (las operaciones
+  que dependen solo de datos propios siguen atendiéndose, responde 200); un
+  estado `DESCONOCIDO` (todavía sin ninguna llamada real) no degrada nada.
+- **Suite de integración con Testcontainers** (#41): la única que corre contra
+  **PostgreSQL y Kafka reales**, porque hay cosas que solo fallan ahí —de
+  hecho encontró un desajuste real entre el tipo `SMALLINT` de
+  `proceso_reserva.intentos_telefono` (V7) y el `int` de la entidad JPA, que
+  ninguna otra prueba había detectado porque el perfil `test` desactiva el
+  acceso a metadatos JDBC. Se corrigió con una migración nueva (V11, nunca se
+  edita una ya mergeada) que ensancha la columna a `INTEGER` en vez de
+  angostar el campo de Java a `short`, que hubiera tenido que tocar dominio,
+  entidad, mappers y varios tests para el mismo resultado observable.
+  `spring-boot-testcontainers` (por `@ServiceConnection`, que autoconfigura
+  `spring.datasource.*` desde el `PostgreSQLContainer` sin declarar la URL a
+  mano) y los módulos de Testcontainers van en **sin fijar versión propia**:
+  `spring-boot-starter-parent` ya importa su BOM. Separada del build rápido
+  por un **perfil Maven `e2e`** que agrega Failsafe (Surefire ya ignora
+  `*IT.java` por convención, así que sin el perfil ni siquiera se intentan
+  correr): `./mvnw verify` de todos los días no necesita Docker, y CI corre
+  `./mvnw verify` y después `./mvnw -Pe2e failsafe:integration-test
+  failsafe:verify` en el mismo job, reusando las clases ya compiladas. La
+  cátedra y el catálogo se simulan con el mismo servidor HTTP en memoria que
+  el resto de la suite (#32): no hace falta ningún secreto real para correrla.
 
 ### Todavía abiertas
 
@@ -403,6 +449,10 @@ persistencia a propósito, pero sí puerto de salida con su adaptador.
 ./mvnw spring-boot:run        # levanta el servicio en el puerto 8081
 ./mvnw clean                  # borra target/
 ```
+
+La suite de Testcontainers de #41 (PostgreSQL y Kafka reales, `src/test/java/.../e2e/*IT.java`)
+necesita Docker disponible y el perfil Maven `e2e`: `./mvnw verify -Pe2e`. Detalle
+completo en el README, sección "Pruebas".
 
 El entorno local completo va con Docker Compose:
 
@@ -530,5 +580,7 @@ perfil `test` (`src/test/resources/application-test.properties`), para que
 `src/test/resources/application.properties` a propósito: un archivo con ese nombre no
 se suma al de `main`, lo tapa, y el contexto falla por
 `Could not resolve placeholder 'spring.application.name'`. Lo activan las clases de
-prueba con `@ActiveProfiles("test")`. Las pruebas contra una base real llegan con
-Testcontainers en #41.
+prueba con `@ActiveProfiles("test")`. Las pruebas contra una base real
+(`src/test/resources/application-e2e.properties`, perfil `e2e`) llegaron con
+Testcontainers en #41: ahí Flyway y el acceso a metadatos JDBC se dejan activos
+(los defaults de `application.properties`), al revés que en `test`.

@@ -24,7 +24,10 @@ public record EstadoServicioResponse(
         String estado,
 
         @Schema(description = "Instante de la consulta, ISO-8601 en UTC")
-        Instant consultadoEn
+        Instant consultadoEn,
+
+        @Schema(description = "Estado de cada dependencia externa")
+        EstadoDependenciasResponse dependencias
 
 ) {
 }

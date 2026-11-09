@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import com.sun.net.httpserver.HttpServer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -30,6 +31,9 @@ import ar.edu.um.turnos.config.catedra.dto.OcupacionesResponse;
 import ar.edu.um.turnos.config.catedra.exception.CatedraClientErrorException;
 import ar.edu.um.turnos.config.catedra.exception.CatedraErrorCode;
 import ar.edu.um.turnos.config.catedra.exception.CatedraServerErrorException;
+import ar.edu.um.turnos.config.observabilidad.EstadoIntegracion;
+import ar.edu.um.turnos.config.observabilidad.Integracion;
+import ar.edu.um.turnos.config.observabilidad.MetricasObservabilidad;
 
 /**
  * Cubre los cinco metodos tipados de {@link CatedraClient} contra un servidor
@@ -55,6 +59,9 @@ class CatedraClientTest {
         servidorFalso.stop(0);
     }
 
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    private final MetricasObservabilidad metricas = new MetricasObservabilidad(registry);
+
     private CatedraClient clienteCon(int maxRetries) {
         CatedraProperties.Api api = new CatedraProperties.Api(
                 "http://localhost:" + servidorFalso.getAddress().getPort(),
@@ -73,7 +80,7 @@ class CatedraClientTest {
                 .requestInterceptor(new CatedraAuthInterceptor(catedraProperties))
                 .build();
 
-        return new CatedraClient(restClient, catedraProperties);
+        return new CatedraClient(restClient, catedraProperties, metricas);
     }
 
     /** Variante de {@link #clienteCon(int)} con un {@code baseUrl} y un {@code readTimeout} propios, para la prueba de timeout. */
@@ -93,7 +100,7 @@ class CatedraClientTest {
                 .requestInterceptor(new CatedraAuthInterceptor(catedraProperties))
                 .build();
 
-        return new CatedraClient(restClient, catedraProperties);
+        return new CatedraClient(restClient, catedraProperties, metricas);
     }
 
     @Test
@@ -369,6 +376,72 @@ class CatedraClientTest {
                         new CrearHoldRequest(15L, LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), "user-42")))
                 .isInstanceOf(CatedraServerErrorException.class);
         assertThat(llamadasRecibidas.get()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("#40: una llamada exitosa marca la catedra como disponible en MetricasObservabilidad")
+    void unaLlamadaExitosaMarcaLaCatedraComoDisponible() {
+        servidorFalso.createContext("/api/appointment-holds", exchange -> responder(exchange, 201, """
+                {"holdId": "hold-6c0c2f41", "reservationProcessId": "process-a92b47d0", "status": "HELD", "expiresAt": "2026-09-10T14:44:50Z"}
+                """));
+
+        clienteCon(0).crearHold(new CrearHoldRequest(15L, LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), "user-42"));
+
+        EstadoIntegracion estado = metricas.estadoDe(Integracion.CATEDRA);
+        assertThat(estado.esConocido()).isTrue();
+        assertThat(estado.disponible()).isTrue();
+    }
+
+    @Test
+    @DisplayName("#40: un fallo en una operacion con efectos cuenta como fallo de integracion, sin contar reintentos")
+    void unFalloEnUnaOperacionConEfectosCuentaComoFalloDeIntegracion() {
+        servidorFalso.createContext("/api/appointment-holds", exchange -> responder(exchange, 503, "{}"));
+
+        assertThatThrownBy(() -> clienteCon(0).crearHold(
+                        new CrearHoldRequest(15L, LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), "user-42")))
+                .isInstanceOf(CatedraServerErrorException.class);
+
+        EstadoIntegracion estado = metricas.estadoDe(Integracion.CATEDRA);
+        assertThat(estado.disponible()).isFalse();
+        assertThat(metricas.estadoDe(Integracion.CATALOGO).esConocido())
+                .as("no se toca el estado del catalogo, es una integracion distinta")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("#40: un 4xx funcional no cuenta como fallo de integracion")
+    void unErrorFuncionalNoCuentaComoFalloDeIntegracion() {
+        servidorFalso.createContext("/api/appointment-holds", exchange -> responder(exchange, 409, """
+                {"status": 409, "detail": "Slot already held", "code": "SLOT_ALREADY_HELD"}
+                """));
+
+        assertThatThrownBy(() -> clienteCon(0).crearHold(
+                        new CrearHoldRequest(15L, LocalDate.of(2026, 9, 14), LocalTime.of(9, 30), "user-42")))
+                .isInstanceOf(CatedraClientErrorException.class);
+
+        assertThat(metricas.estadoDe(Integracion.CATEDRA).esConocido())
+                .as("la catedra respondio: no es un fallo de integracion")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("#40: agotados los reintentos de un GET, queda un fallo y dos reintentos contados")
+    void agotadosLosReintentosQuedanLosContadoresDeReintentoYFallo() {
+        servidorFalso.createContext("/api/appointment-occupancies", exchange -> {
+            llamadasRecibidas.incrementAndGet();
+            responder(exchange, 503, "{}");
+        });
+
+        assertThatThrownBy(() -> clienteCon(2).obtenerOcupaciones(15L, LocalDate.of(2026, 9, 14), LocalDate.of(2026, 9, 14)))
+                .isInstanceOf(CatedraServerErrorException.class);
+
+        assertThat(metricas.estadoDe(Integracion.CATEDRA).disponible()).isFalse();
+        assertThat(metricas.estadoDe(Integracion.CATEDRA).esConocido()).isTrue();
+        // El primer intento no cuenta como reintento: quedan 2 reintentos y 1 fallo definitivo.
+        assertThat(registry.get("turnos.integracion.reintentos").tag("destino", "catedra").counter().count())
+                .isEqualTo(2.0);
+        assertThat(registry.get("turnos.integracion.fallos").tag("destino", "catedra").counter().count())
+                .isEqualTo(1.0);
     }
 
     private static void responder(com.sun.net.httpserver.HttpExchange exchange, int status, String cuerpoJson) throws java.io.IOException {
