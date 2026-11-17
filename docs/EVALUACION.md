@@ -3,19 +3,19 @@
 
 > Documento **generado automáticamente** por la cátedra de Programación II (UM): RepoSense + análisis de calidad de **7 dimensiones**. **No editar a mano**: se regenera en cada evaluación.
 > Rama evaluada: `main`. Análisis **heurístico** (regex + métricas) + build: es una criba para orientar la revisión, **no una nota**. La **documentación** del repositorio no se evalúa.
-> Generado: 2026-11-12.
+> Generado: 2026-11-17.
 
 ## 1. Veredicto
 
 | Aspecto | Resultado |
 |---|---|
-| Índice de calidad | **72/100** |
+| Índice de calidad | **74/100** |
 | Tipo de repositorio | `backend` |
 | Build (`mvnw verify` / `gradlew check`) | OK |
 | Código (LOC) | 3,403 |
 | Archivos de código | 73 |
 | Clases | 93 |
-| Código dentro de clases (%POO) | 74% |
+| Código dentro de clases (%POO) | 52% |
 | Funciones fuera de clases | 0 |
 | Duplicación (puerta) | 3.7% |
 | Duplicación lógica | 4.0% |
@@ -52,7 +52,7 @@ Cada dimensión indica **qué mide**, **por qué importa** y **tu resultado**. C
 
 | Dimensión | Peso | Puntaje |
 |:--|--:|--:|
-| **D1** Diseño OO, SOLID y patrones (20%) | 20% | 6 |
+| **D1** Diseño OO, SOLID y patrones (20%) | 20% | 12 |
 | **D2** Arquitectura hexagonal — backend (15%) | 15% | 100 |
 | **D3** Frontend KMP: MVVM y buenas prácticas (10%) | 10% | N/A |
 | **D4** Integración y contrato (10%) | 10% | 40 |
@@ -64,7 +64,7 @@ Cada dimensión indica **qué mide**, **por qué importa** y **tu resultado**. C
 
 - **Qué mide:** Métricas orientadas a objetos (clases, métodos, campos, cohesión, acoplamiento, herencia) y proxies de SOLID, más patrones de diseño.
 - **Por qué importa:** El eje de la materia es el buen uso de la POO y su arquitectura: un diseño con clases claras y poco acopladas es más fácil de entender, probar y cambiar.
-- **Tu resultado:** **6/100**
+- **Tu resultado:** **12/100**
 - **Para investigar la causa:**
     - ¿Se pensó el modelo de clases antes de codificar o se agrupó después?
     - ¿Qué clases concentran muchas responsabilidades a la vez?
@@ -108,7 +108,7 @@ Cada dimensión indica **qué mide**, **por qué importa** y **tu resultado**. C
 
 El análisis encontró las siguientes señales (archivo, sin número de línea a propósito):
 
-**DIP/concretos** (34)
+**DIP/concretos** (16)
 - clase 'JwtIssuerAdapter' muy acoplada (CBO=11) — `src/main/java/ar/edu/um/turnos/auth/infrastructure/security/adapter/JwtIssuerAdapter.java`
 - clase 'PasswordEncoderConfig' muy acoplada (CBO=9) — `src/main/java/ar/edu/um/turnos/auth/infrastructure/config/PasswordEncoderConfig.java`
 - clase 'AutenticacionController' muy acoplada (CBO=10) — `src/main/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionController.java`
@@ -125,40 +125,15 @@ El análisis encontró las siguientes señales (archivo, sin número de línea a
 - clase 'ProblemDetailResponses' muy acoplada (CBO=14) — `src/main/java/ar/edu/um/turnos/config/security/ProblemDetailResponses.java`
 - clase 'InternalJwtIssuer' muy acoplada (CBO=16) — `src/main/java/ar/edu/um/turnos/config/catalogo/InternalJwtIssuer.java`
 - clase 'CatalogoAuthInterceptor' muy acoplada (CBO=9) — `src/main/java/ar/edu/um/turnos/config/catalogo/CatalogoAuthInterceptor.java`
-- clase 'AuthSecurityIntegrationTest' muy acoplada (CBO=35) — `src/test/java/ar/edu/um/turnos/auth/AuthSecurityIntegrationTest.java`
-- clase 'AltaDeUsuarios' muy acoplada (CBO=8) — `src/test/java/ar/edu/um/turnos/auth/AuthSecurityIntegrationTest.java`
-- clase 'Login' muy acoplada (CBO=17) — `src/test/java/ar/edu/um/turnos/auth/AuthSecurityIntegrationTest.java`
-- clase 'JwtIssuerAdapterTest' muy acoplada (CBO=14) — `src/test/java/ar/edu/um/turnos/auth/infrastructure/security/adapter/JwtIssuerAdapterTest.java`
-- clase 'AutenticacionControllerTest' muy acoplada (CBO=8) — `src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionControllerTest.java`
-- clase 'RegistroControllerTest' muy acoplada (CBO=12) — `src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java`
-- clase 'RegistrarUsuarioUseCaseImplTest' muy acoplada (CBO=16) — `src/test/java/ar/edu/um/turnos/auth/application/usecases/RegistrarUsuarioUseCaseImplTest.java`
-- clase 'AutenticarUsuarioUseCaseImplTest' muy acoplada (CBO=10) — `src/test/java/ar/edu/um/turnos/auth/application/usecases/AutenticarUsuarioUseCaseImplTest.java`
-- clase 'JwtPropertiesTest' muy acoplada (CBO=11) — `src/test/java/ar/edu/um/turnos/config/JwtPropertiesTest.java`
-- clase 'CatedraPropertiesTest' muy acoplada (CBO=11) — `src/test/java/ar/edu/um/turnos/config/CatedraPropertiesTest.java`
-- clase 'SecurityConfigTest' muy acoplada (CBO=31) — `src/test/java/ar/edu/um/turnos/config/SecurityConfigTest.java`
-- clase 'Autenticacion' muy acoplada (CBO=11) — `src/test/java/ar/edu/um/turnos/config/SecurityConfigTest.java`
-- clase 'Cors' muy acoplada (CBO=9) — `src/test/java/ar/edu/um/turnos/config/SecurityConfigTest.java`
-- clase 'InternalJwtIssuerTest' muy acoplada (CBO=13) — `src/test/java/ar/edu/um/turnos/config/catalogo/InternalJwtIssuerTest.java`
-- clase 'CatalogoAuthInterceptorTest' muy acoplada (CBO=11) — `src/test/java/ar/edu/um/turnos/config/catalogo/CatalogoAuthInterceptorTest.java`
-- clase 'CatalogoAuthInterceptorTest' instancia 9 concretos (CBO=11) — `src/test/java/ar/edu/um/turnos/config/catalogo/CatalogoAuthInterceptorTest.java`
-- clase 'CatalogoRestClientIntegrationTest' muy acoplada (CBO=29) — `src/test/java/ar/edu/um/turnos/config/catalogo/CatalogoRestClientIntegrationTest.java`
-- clase 'CatalogoRestClientIntegrationTest' instancia 4 concretos (CBO=29) — `src/test/java/ar/edu/um/turnos/config/catalogo/CatalogoRestClientIntegrationTest.java`
 
-**SRP/responsabilidad** (14)
+**SRP/responsabilidad** (7)
 - clase 'UsuarioJpaEntity' grande (LOC=28, métodos=0, campos=11) — `src/main/java/ar/edu/um/turnos/auth/infrastructure/persistence/entity/UsuarioJpaEntity.java`
-- clase 'UsuarioJpaEntity' sin métodos (11 campos): solo datos — `src/main/java/ar/edu/um/turnos/auth/infrastructure/persistence/entity/UsuarioJpaEntity.java`
 - método 'RegistrarUsuarioUseCaseImpl.registrar' de 30 líneas — `src/main/java/ar/edu/um/turnos/auth/application/usecases/RegistrarUsuarioUseCaseImpl.java`
 - clase 'SolicitudRegistroUsuario' sin métodos (7 campos): solo datos — `src/main/java/ar/edu/um/turnos/auth/domain/model/SolicitudRegistroUsuario.java`
 - clase 'Usuario' grande (LOC=15, métodos=0, campos=11) — `src/main/java/ar/edu/um/turnos/auth/domain/model/Usuario.java`
 - clase 'Usuario' sin métodos (11 campos): solo datos — `src/main/java/ar/edu/um/turnos/auth/domain/model/Usuario.java`
 - clase 'EstadoServicio' sin métodos (4 campos): solo datos — `src/main/java/ar/edu/um/turnos/health/domain/model/EstadoServicio.java`
 - clase 'SecurityConfig' con baja cohesión (0%) — `src/main/java/ar/edu/um/turnos/config/SecurityConfig.java`
-- clase 'AuthSecurityIntegrationTest' grande (LOC=160, métodos=15, campos=6) — `src/test/java/ar/edu/um/turnos/auth/AuthSecurityIntegrationTest.java`
-- clase 'AuthSecurityIntegrationTest' con baja cohesión (34%) — `src/test/java/ar/edu/um/turnos/auth/AuthSecurityIntegrationTest.java`
-- clase 'Login' grande (LOC=56, métodos=10, campos=0) — `src/test/java/ar/edu/um/turnos/auth/AuthSecurityIntegrationTest.java`
-- clase 'JwtPropertiesTest' grande (LOC=99, métodos=11, campos=4) — `src/test/java/ar/edu/um/turnos/config/JwtPropertiesTest.java`
-- clase 'CatedraPropertiesTest' grande (LOC=132, métodos=19, campos=4) — `src/test/java/ar/edu/um/turnos/config/CatedraPropertiesTest.java`
-- clase 'SecurityConfigTest' grande (LOC=110, métodos=14, campos=4) — `src/test/java/ar/edu/um/turnos/config/SecurityConfigTest.java`
 
 **duplicación** (6)
 - duplicación lógica: 3.7% · boilerplate: 9.6%
@@ -177,14 +152,14 @@ xychart-beta
     title "Índice de calidad a lo largo de los commits"
     x-axis ["af12433", "f93035e", "7a95d71"]
     y-axis "Índice" 0 --> 100
-    line [0, 15, 61]
+    line [0, 15, 63]
 ```
 
 | # | Fecha | Commit | Autor | LOC | Índice | %POO | Duplic. | Sueltas |
 |---|---|---|---|---:|---:|---:|---:|---:|
 | 1 | 2026-09-10 | `af12433` | Ing. Daniel Quinteros | 0 | 0 | 0% | 0.0% | 0 |
 | 2 | 2026-09-10 | `f93035e` | Ing. Daniel Quinteros | 0 | 15 | 0% | 0.0% | 0 |
-| 3 | 2026-11-04 | `7a95d71` | Manuel Diez de Oñate | 3,403 | 61 | 74% | 3.7% | 0 |
+| 3 | 2026-11-04 | `7a95d71` | Manuel Diez de Oñate | 3,403 | 63 | 52% | 3.7% | 0 |
 
 ---
 _Informe generado por la cátedra. Las dimensiones y umbrales corresponden a `calidad.py` (perfil `exigente`); el semáforo, a `CRITERIOS-CALIDAD.md`. La documentación del repositorio no se evalúa. Ante dudas, revisá el archivo señalado._
