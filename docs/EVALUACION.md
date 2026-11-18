@@ -3,7 +3,7 @@
 
 > Documento **generado automáticamente** por la cátedra de Programación II (UM): RepoSense + análisis de calidad de **7 dimensiones**. **No editar a mano**: se regenera en cada evaluación.
 > Rama evaluada: `main`. Análisis **heurístico** (regex + métricas) + build: es una criba para orientar la revisión, **no una nota**. La **documentación** del repositorio no se evalúa.
-> Generado: 2026-11-17.
+> Generado: 2026-11-18.
 
 ## 1. Veredicto
 
@@ -31,10 +31,10 @@ Criterios de la cátedra (`CRITERIOS-CALIDAD.md`): **Aprobar** se juega con el p
 
 | Semáforo | Resultado |
 |---|---|
-| Aprobar (`estandar`) | **no cumple** — 7/11 |
+| Aprobar (`estandar`) | **no cumple** — 6/11 |
 | Destacar (`exigente`) | **no cumple** — 5/11 |
 
-**Para aprobar, falta cumplir:** Duplicación
+**Para aprobar, falta cumplir:** SOLID; Duplicación
 
 **Para destacar, falta cumplir:** SOLID; POO; Duplicación
 
@@ -52,7 +52,7 @@ Cada dimensión indica **qué mide**, **por qué importa** y **tu resultado**. C
 
 | Dimensión | Peso | Puntaje |
 |:--|--:|--:|
-| **D1** Diseño OO, SOLID y patrones (20%) | 20% | 12 |
+| **D1** Diseño OO, SOLID y patrones (20%) | 20% | 13 |
 | **D2** Arquitectura hexagonal — backend (15%) | 15% | 100 |
 | **D3** Frontend KMP: MVVM y buenas prácticas (10%) | 10% | N/A |
 | **D4** Integración y contrato (10%) | 10% | 40 |
@@ -64,7 +64,7 @@ Cada dimensión indica **qué mide**, **por qué importa** y **tu resultado**. C
 
 - **Qué mide:** Métricas orientadas a objetos (clases, métodos, campos, cohesión, acoplamiento, herencia) y proxies de SOLID, más patrones de diseño.
 - **Por qué importa:** El eje de la materia es el buen uso de la POO y su arquitectura: un diseño con clases claras y poco acopladas es más fácil de entender, probar y cambiar.
-- **Tu resultado:** **12/100**
+- **Tu resultado:** **13/100**
 - **Para investigar la causa:**
     - ¿Se pensó el modelo de clases antes de codificar o se agrupó después?
     - ¿Qué clases concentran muchas responsabilidades a la vez?
@@ -106,42 +106,58 @@ Cada dimensión indica **qué mide**, **por qué importa** y **tu resultado**. C
 
 ## 5. Señales detectadas
 
-El análisis encontró las siguientes señales (archivo, sin número de línea a propósito):
+El análisis encontró las siguientes señales, con el archivo y la línea donde se originan cuando están disponibles:
+
+**Archivos con más señales**
+
+| Archivo | Señales |
+|---|---:|
+| `src/main/java/ar/edu/um/turnos/config/SecurityConfig.java` | 3 |
+| `src/main/java/ar/edu/um/turnos/config/JwtProperties.java` | 3 |
+| `src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java` | 3 |
+| `src/main/java/ar/edu/um/turnos/auth/application/usecases/RegistrarUsuarioUseCaseImpl.java` | 2 |
+| `src/main/java/ar/edu/um/turnos/config/CatedraProperties.java` | 2 |
+| `src/main/java/ar/edu/um/turnos/config/security/ProblemDetailResponses.java` | 2 |
+| `src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionControllerTest.java` | 2 |
+| `src/main/java/ar/edu/um/turnos/auth/infrastructure/security/adapter/JwtIssuerAdapter.java` | 1 |
+| `src/main/java/ar/edu/um/turnos/auth/infrastructure/config/PasswordEncoderConfig.java` | 1 |
+| `src/main/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionController.java` | 1 |
 
 **DIP/concretos** (16)
-- clase 'JwtIssuerAdapter' muy acoplada (CBO=11) — `src/main/java/ar/edu/um/turnos/auth/infrastructure/security/adapter/JwtIssuerAdapter.java`
-- clase 'PasswordEncoderConfig' muy acoplada (CBO=9) — `src/main/java/ar/edu/um/turnos/auth/infrastructure/config/PasswordEncoderConfig.java`
-- clase 'AutenticacionController' muy acoplada (CBO=10) — `src/main/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionController.java`
-- clase 'AuthExceptionHandler' muy acoplada (CBO=13) — `src/main/java/ar/edu/um/turnos/auth/infrastructure/web/advice/AuthExceptionHandler.java`
-- clase 'RegistrarUsuarioUseCaseImpl' muy acoplada (CBO=17) — `src/main/java/ar/edu/um/turnos/auth/application/usecases/RegistrarUsuarioUseCaseImpl.java`
-- clase 'AutenticarUsuarioUseCaseImpl' muy acoplada (CBO=9) — `src/main/java/ar/edu/um/turnos/auth/application/usecases/AutenticarUsuarioUseCaseImpl.java`
-- clase 'EstadoServicioResponse' muy acoplada (CBO=9) — `src/main/java/ar/edu/um/turnos/health/infrastructure/web/dto/EstadoServicioResponse.java`
-- clase 'CatedraProperties' muy acoplada (CBO=25) — `src/main/java/ar/edu/um/turnos/config/CatedraProperties.java`
-- clase 'SecurityConfig' muy acoplada (CBO=49) — `src/main/java/ar/edu/um/turnos/config/SecurityConfig.java`
-- clase 'SecurityConfig' instancia 5 concretos (CBO=49) — `src/main/java/ar/edu/um/turnos/config/SecurityConfig.java`
-- clase 'JwtProperties' muy acoplada (CBO=21) — `src/main/java/ar/edu/um/turnos/config/JwtProperties.java`
-- clase 'JwtAuthenticationEntryPoint' muy acoplada (CBO=11) — `src/main/java/ar/edu/um/turnos/config/security/JwtAuthenticationEntryPoint.java`
-- clase 'JwtAccessDeniedHandler' muy acoplada (CBO=11) — `src/main/java/ar/edu/um/turnos/config/security/JwtAccessDeniedHandler.java`
-- clase 'ProblemDetailResponses' muy acoplada (CBO=14) — `src/main/java/ar/edu/um/turnos/config/security/ProblemDetailResponses.java`
-- clase 'InternalJwtIssuer' muy acoplada (CBO=16) — `src/main/java/ar/edu/um/turnos/config/catalogo/InternalJwtIssuer.java`
-- clase 'CatalogoAuthInterceptor' muy acoplada (CBO=9) — `src/main/java/ar/edu/um/turnos/config/catalogo/CatalogoAuthInterceptor.java`
+- clase 'AutenticarUsuarioUseCaseImpl' muy acoplada (CBO=9) — `src/main/java/ar/edu/um/turnos/auth/application/usecases/AutenticarUsuarioUseCaseImpl.java:24`
+- clase 'RegistrarUsuarioUseCaseImpl' muy acoplada (CBO=17) — `src/main/java/ar/edu/um/turnos/auth/application/usecases/RegistrarUsuarioUseCaseImpl.java:24`
+- clase 'PasswordEncoderConfig' muy acoplada (CBO=9) — `src/main/java/ar/edu/um/turnos/auth/infrastructure/config/PasswordEncoderConfig.java:37`
+- clase 'JwtIssuerAdapter' muy acoplada (CBO=11) — `src/main/java/ar/edu/um/turnos/auth/infrastructure/security/adapter/JwtIssuerAdapter.java:55`
+- clase 'AuthExceptionHandler' muy acoplada (CBO=13) — `src/main/java/ar/edu/um/turnos/auth/infrastructure/web/advice/AuthExceptionHandler.java:18`
+- clase 'AutenticacionController' muy acoplada (CBO=10) — `src/main/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionController.java:32`
+- clase 'CatedraProperties' muy acoplada (CBO=25) — `src/main/java/ar/edu/um/turnos/config/CatedraProperties.java:51`
+- clase 'JwtProperties' muy acoplada (CBO=22) — `src/main/java/ar/edu/um/turnos/config/JwtProperties.java:46`
+- clase 'SecurityConfig' muy acoplada (CBO=49) — `src/main/java/ar/edu/um/turnos/config/SecurityConfig.java:45`
+- clase 'SecurityConfig' instancia 5 concretos (CBO=49) — `src/main/java/ar/edu/um/turnos/config/SecurityConfig.java:45`
+- clase 'CatalogoAuthInterceptor' muy acoplada (CBO=9) — `src/main/java/ar/edu/um/turnos/config/catalogo/CatalogoAuthInterceptor.java:27`
+- clase 'InternalJwtIssuer' muy acoplada (CBO=16) — `src/main/java/ar/edu/um/turnos/config/catalogo/InternalJwtIssuer.java:39`
+- clase 'JwtAccessDeniedHandler' muy acoplada (CBO=11) — `src/main/java/ar/edu/um/turnos/config/security/JwtAccessDeniedHandler.java:18`
+- clase 'JwtAuthenticationEntryPoint' muy acoplada (CBO=11) — `src/main/java/ar/edu/um/turnos/config/security/JwtAuthenticationEntryPoint.java:17`
+- clase 'ProblemDetailResponses' muy acoplada (CBO=13) — `src/main/java/ar/edu/um/turnos/config/security/ProblemDetailResponses.java:21`
+- clase 'EstadoServicioResponse' muy acoplada (CBO=9) — `src/main/java/ar/edu/um/turnos/health/infrastructure/web/dto/EstadoServicioResponse.java:15`
 
-**SRP/responsabilidad** (7)
-- clase 'UsuarioJpaEntity' grande (LOC=28, métodos=0, campos=11) — `src/main/java/ar/edu/um/turnos/auth/infrastructure/persistence/entity/UsuarioJpaEntity.java`
-- método 'RegistrarUsuarioUseCaseImpl.registrar' de 30 líneas — `src/main/java/ar/edu/um/turnos/auth/application/usecases/RegistrarUsuarioUseCaseImpl.java`
-- clase 'SolicitudRegistroUsuario' sin métodos (7 campos): solo datos — `src/main/java/ar/edu/um/turnos/auth/domain/model/SolicitudRegistroUsuario.java`
-- clase 'Usuario' grande (LOC=15, métodos=0, campos=11) — `src/main/java/ar/edu/um/turnos/auth/domain/model/Usuario.java`
-- clase 'Usuario' sin métodos (11 campos): solo datos — `src/main/java/ar/edu/um/turnos/auth/domain/model/Usuario.java`
-- clase 'EstadoServicio' sin métodos (4 campos): solo datos — `src/main/java/ar/edu/um/turnos/health/domain/model/EstadoServicio.java`
-- clase 'SecurityConfig' con baja cohesión (0%) — `src/main/java/ar/edu/um/turnos/config/SecurityConfig.java`
+**SRP/responsabilidad** (5)
+- método 'RegistrarUsuarioUseCaseImpl.registrar' de 30 líneas — `src/main/java/ar/edu/um/turnos/auth/application/usecases/RegistrarUsuarioUseCaseImpl.java:33`
+- método 'CatedraProperties.CatedraProperties' de 90 líneas — `src/main/java/ar/edu/um/turnos/config/CatedraProperties.java:51`
+- método 'JwtProperties.JwtProperties' de 52 líneas — `src/main/java/ar/edu/um/turnos/config/JwtProperties.java:46`
+- clase 'SecurityConfig' con baja cohesión (0%) — `src/main/java/ar/edu/um/turnos/config/SecurityConfig.java:45`
+- método 'ProblemDetailResponses.escribir' con 5 parámetros — `src/main/java/ar/edu/um/turnos/config/security/ProblemDetailResponses.java:37`
+
+**LSP/overrides** (1)
+- 'JwtProperties.JwtProperties' vacío o 'no implementado' — `src/main/java/ar/edu/um/turnos/config/JwtProperties.java:46`
 
 **duplicación** (6)
 - duplicación lógica: 3.7% · boilerplate: 9.6%
-- bloque de 8 líneas repetido 4 veces en src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionControllerTest.java:74, src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionControllerTest.java:89, src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:73 — `src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionControllerTest.java`
-- bloque de 8 líneas repetido 2 veces en src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:71, src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:88 — `src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java`
-- bloque de 8 líneas repetido 2 veces en src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:72, src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:89 — `src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java`
-- bloque de 8 líneas repetido 2 veces en src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionControllerTest.java:72, src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionControllerTest.java:87 — `src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionControllerTest.java`
-- bloque de 8 líneas repetido 2 veces en src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:69, src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:86 — `src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java`
+- bloque de 8 líneas repetido 2 veces en src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionControllerTest.java:72, src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionControllerTest.java:87 — `src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionControllerTest.java:72`
+- bloque de 8 líneas repetido 4 veces en src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionControllerTest.java:74, src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionControllerTest.java:89, src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:73 — `src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/AutenticacionControllerTest.java:74`
+- bloque de 8 líneas repetido 2 veces en src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:69, src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:86 — `src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:69`
+- bloque de 8 líneas repetido 2 veces en src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:71, src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:88 — `src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:71`
+- bloque de 8 líneas repetido 2 veces en src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:72, src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:89 — `src/test/java/ar/edu/um/turnos/auth/infrastructure/web/controller/RegistroControllerTest.java:72`
 
 ## 6. Evolución por commit
 
