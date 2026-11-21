@@ -64,6 +64,11 @@ ubicar este repo en el conjunto. Dos cosas quedan explícitas en el diagrama:
   servicio como mecanismo de integración, solo los contratos REST/Kafka del
   diagrama.
 
+El contrato completo (operaciones, DTO, autenticación y errores de lo que se
+consume del catálogo; lo que este servicio expone a KMP; el modelo de datos
+propio y la propiedad de cada dato) está en
+[`docs/contrato-y-modelo-de-datos.md`](docs/contrato-y-modelo-de-datos.md).
+
 ## Levantar el entorno local
 
 Requiere Docker. No hace falta tener Java ni Maven instalados: la imagen compila
