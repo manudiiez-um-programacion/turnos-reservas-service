@@ -9,6 +9,61 @@
 Servicio de turnos y reservas del proyecto integrador de Programación 2
 (Universidad de Mendoza).
 
+## Arquitectura
+
+El proyecto integrador son **tres repositorios** más un servicio central que
+administra la cátedra (no se corre local, se consume por red):
+
+```mermaid
+flowchart TB
+    KMP["App Android KMP\n(turnos-app-android)"]
+
+    subgraph propios["Backends propios del proyecto"]
+        direction TB
+        CATALOGO["Servicio de catálogo y sincronización\n(turnos-catalogo-sync)"]
+        TURNOS["Servicio de turnos y reservas\n(ESTE REPO)"]
+        PG[("PostgreSQL\n1 instancia, 2 bases lógicas\ncatalogo | turnos_reservas")]
+        CATALOGO -->|"JDBC"| PG
+        TURNOS -->|"JDBC"| PG
+    end
+
+    subgraph catedra["Servicio central de la cátedra (externo, administrado)"]
+        direction TB
+        CAT_REST["REST: catálogo, ocupaciones,\nholds, reservas, auth técnica"]
+        CAT_REDIS["Redis: snapshot del catálogo"]
+        CAT_KAFKA["Kafka: catalogo.* / alumnos.turnos.* / catedra.turnos.*"]
+    end
+
+    KMP -->|"REST + JWT usuario\nbúsqueda de catálogo"| CATALOGO
+    KMP -->|"REST + JWT usuario\nregistro, login, holds,\nreservas propias"| TURNOS
+
+    TURNOS -->|"REST + JWT interno\nagenda vigente (#16)"| CATALOGO
+
+    CATALOGO -->|"REST + JWT técnico\nsincronización completa/incremental"| CAT_REST
+    CATALOGO -->|"suscripción\nCatalogUpdated"| CAT_KAFKA
+    CATALOGO -.->|"lectura\n(no implementado hoy)"| CAT_REDIS
+
+    TURNOS ==>|"REST + JWT técnico\nocupaciones, holds, reservas"| CAT_REST
+    TURNOS ==>|"consume\nAdditionalInformationRequested\nAppointmentConfirmed / Rejected\nAppointmentProcessExpired/Invalid\nAppointmentCancelled"| CAT_KAFKA
+    TURNOS ==>|"publica\nAdditionalInformationSubmitted"| CAT_KAFKA
+```
+
+Las flechas dobles (`==>`) marcan lo que **este servicio** consume o publica;
+las simples (`-->`) son integraciones del otro backend, incluidas solo para
+ubicar este repo en el conjunto. Dos cosas quedan explícitas en el diagrama:
+
+- Este servicio **no replica el catálogo**: no hay flecha de `turnos-reservas`
+  hacia ninguna copia local de categorías, profesionales u horarios. La
+  **disponibilidad** que expone a KMP se calcula en el momento combinando las
+  reglas semanales vigentes (pedidas en vivo al servicio de catálogo) con las
+  ocupaciones (`CONFIRMED` / `HELD`) que informa la cátedra — nunca con datos
+  guardados de una consulta anterior.
+- Los dos backends propios comparten la **instancia** de PostgreSQL pero no la
+  base: cada uno tiene su base lógica y su rol, sin permisos cruzados (detalle
+  en "Base de datos" más abajo). No hay acceso a tablas ni a esquemas del otro
+  servicio como mecanismo de integración, solo los contratos REST/Kafka del
+  diagrama.
+
 ## Levantar el entorno local
 
 Requiere Docker. No hace falta tener Java ni Maven instalados: la imagen compila
