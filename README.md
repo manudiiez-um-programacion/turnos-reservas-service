@@ -67,7 +67,11 @@ ubicar este repo en el conjunto. Dos cosas quedan explícitas en el diagrama:
 El contrato completo (operaciones, DTO, autenticación y errores de lo que se
 consume del catálogo; lo que este servicio expone a KMP; el modelo de datos
 propio y la propiedad de cada dato) está en
-[`docs/contrato-y-modelo-de-datos.md`](docs/contrato-y-modelo-de-datos.md).
+[`docs/contrato-y-modelo-de-datos.md`](docs/contrato-y-modelo-de-datos.md). La
+idempotencia por `eventId`, la máquina de estados del proceso de reserva, la
+reconciliación ante timeouts/reinicios/vencimientos y las decisiones de
+seguridad (con sus límites conocidos) están en
+[`docs/idempotencia-recuperacion-seguridad.md`](docs/idempotencia-recuperacion-seguridad.md).
 
 ## Levantar el entorno local
 
