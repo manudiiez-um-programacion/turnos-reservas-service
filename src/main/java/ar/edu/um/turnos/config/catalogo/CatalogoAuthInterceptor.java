@@ -11,10 +11,10 @@ import org.springframework.stereotype.Component;
 
 /**
  * Agrega a cada llamada saliente al catalogo el JWT tecnico interno y el
- * header de correlacion (#12). Se registra en el {@code RestClient} o
- * {@code RestTemplate} que llame a la agenda vigente (#16/#17): no define uno
- * propio porque la URL base del catalogo todavia es una decision abierta
- * (ver CLAUDE.md §9), y atarla aca la adelantaria sin necesidad.
+ * header de correlacion (#12). Lo registra {@link CatalogoRestClientConfig}
+ * en el {@code RestClient} que llama a la agenda vigente (#16): no define
+ * uno propio porque la URL base y los timeouts son responsabilidad de esa
+ * configuracion, no de este interceptor.
  *
  * <p>El header {@code X-Correlation-Id} es, segun el ADR 0002, lo que
  * reemplaza a la identidad del usuario para la trazabilidad (el token tecnico

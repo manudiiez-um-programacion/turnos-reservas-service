@@ -221,6 +221,12 @@ Si el hook rechaza un commit, corregir el mensaje y reintentar; nunca saltearlo.
 
 ## 6. Flujo de trabajo paso a paso
 
+Los tres tipos de PR hacia una rama protegida o hacia una rama de milestone (6.4,
+6.5, 6.6) llevan completa la barra lateral de GitHub (Assignees, Labels, Milestone,
+Development): el detalle de qué poner en cada campo está en la sección
+correspondiente. Verificar a mano, después de crear cada PR, que los cuatro campos
+quedaron completos (en Development, completos hasta el límite de la plataforma).
+
 ### 6.1 Empezar un milestone
 
 Si `develop` no existe en el remoto, detenerse y avisar al usuario (no crearla por cuenta propia).
@@ -281,6 +287,29 @@ Refs #12
 
 Se usa `Refs`, no `Closes`: el issue se cierra recién al llegar a `main`. Merge con **merge commit** para conservar los commits del issue.
 
+**Barra lateral del PR.** No alcanza con título y cuerpo: el profesor evalúa el repo
+por estos PR, y uno con la barra lateral vacía se lee como trabajo incompleto y le
+saca trazabilidad al historial. Completar los cuatro campos:
+
+- **Assignees**: `manudiiez`.
+- **Labels**: el label del issue (su tipo).
+- **Milestone**: el milestone de GitHub al que pertenece el issue.
+- **Development**: vincular el issue al PR. No sirven los *closing keywords*
+  (`Closes #N`): la base no es la rama por defecto, así que el issue no se cerraría al
+  mergear, y además pisaría el `Refs #N` del cuerpo. Se usa la mutación GraphQL
+  `addCloseIssueReferences`, que vincula sin tocar el cuerpo ni cerrar nada:
+
+```bash
+gh pr edit <N> --add-assignee manudiiez --add-label <tipo-del-issue> \
+  --milestone "M1 - Infraestructura base"
+
+PR_ID=$(gh api repos/:owner/:repo/pulls/<N> --jq '.node_id')
+ISSUE_ID=$(gh api repos/:owner/:repo/issues/<I> --jq '.node_id')
+gh api graphql -f query='mutation($i:ID!,$p:[ID!]!){
+  addCloseIssueReferences(input:{issueId:$i, pullRequestIds:$p}){ clientMutationId } }' \
+  -f i="$ISSUE_ID" -f p="$PR_ID"
+```
+
 ### 6.5 Cerrar el milestone: PR a develop
 
 Cuando todos los issues del milestone están integrados en su rama:
@@ -315,6 +344,20 @@ Qué aporta este milestone en conjunto.
 - Si después de la aprobación se pushean cambios importantes, avisar al usuario para que pida un nuevo review (las aprobaciones no se descartan solas).
 - El profesor recibe el pedido de review automáticamente (CODEOWNERS). Después de su aprobación, mergear con **merge commit** (nunca squash) y borrar la rama de milestone.
 
+**Barra lateral del PR**, mismos cuatro campos que en 6.4, con dos diferencias porque
+este PR agrupa varios issues:
+
+- **Labels**: la **unión** de los labels (tipos) de todos los issues incluidos en el
+  milestone (ej. un milestone con un issue `chore` y uno `docs` lleva ambos labels).
+- **Milestone**: el milestone de GitHub de este PR (el mismo nombre que su título).
+- **Development**: vincular cada issue incluido, uno por uno, con la misma mutación
+  `addCloseIssueReferences` de 6.4.
+  **GitHub limita a 10 las referencias manuales de Development por PR**: a partir del
+  undécimo issue, la mutación falla con `"Pull request exceeds manual reference
+  limit"`. Vincular los primeros 10 (por número de issue, ascendente) y dejar que la
+  lista completa del cuerpo del PR —la de "Issues incluidos", que no tiene ese
+  límite— sea la fuente completa para el resto.
+
 ### 6.6 Promociones develop → testing → main
 
 Una vez por milestone, después de que el profesor apruebe y se mergee el PR
@@ -346,6 +389,18 @@ gh pr create --base main --head testing --title "release: testing → main (M1)"
   gh api repos/{owner}/{repo}/milestones --jq '.[] | "\(.number) \(.title)"'
   gh api -X PATCH repos/{owner}/{repo}/milestones/<numero> -f state=closed
   ```
+
+**Barra lateral de los dos PR**, mismo criterio de Assignees/Labels/Development que
+6.5 (unión de labels, límite de 10 referencias de Development), con dos diferencias:
+
+- **Milestone**: si la promoción abarca un solo milestone de GitHub, ese. Si abarca
+  varios —el caso típico de una promoción, que puede juntar más de un milestone
+  cerrado desde la última— usar el **más alto/reciente** de los incluidos: el campo
+  "Milestone" de un PR solo acepta uno y no hay forma de listar varios.
+- El PR hacia `main` **no necesita la mutación `addCloseIssueReferences`**: los
+  `Closes #N` que ya lleva el cuerpo generan el vínculo de Development solos, porque
+  `main` es la rama por defecto. El PR hacia `testing` sí la necesita, igual que en
+  6.5, porque usa `Refs #N` y su base no es la rama por defecto.
 
 ## 7. Prohibido
 

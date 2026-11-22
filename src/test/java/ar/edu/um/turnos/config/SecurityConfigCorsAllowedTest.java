@@ -1,10 +1,12 @@
 package ar.edu.um.turnos.config;
 
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,7 +15,12 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import ar.edu.um.turnos.health.domain.model.EstadoDependencia;
+import ar.edu.um.turnos.health.domain.model.EstadoDependencias;
+import ar.edu.um.turnos.health.domain.ports.out.EstadoDependenciasPort;
 
 /**
  * Con un origen listado en {@code turnos.cors.allowed-origins}, el preflight
@@ -32,6 +39,20 @@ class SecurityConfigCorsAllowedTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    // #40: ver el mismo mock en SecurityConfigTest. Esta clase prueba CORS,
+    // no el estado de salud.
+    @MockitoBean
+    private EstadoDependenciasPort estadoDependenciasPort;
+
+    @BeforeEach
+    void estadoDependenciasDisponible() {
+        when(estadoDependenciasPort.consultar()).thenReturn(EstadoDependencias.builder()
+                .baseDeDatos(EstadoDependencia.DISPONIBLE)
+                .catedra(EstadoDependencia.DESCONOCIDO)
+                .catalogo(EstadoDependencia.DESCONOCIDO)
+                .build());
+    }
 
     @Test
     @DisplayName("el preflight de un endpoint protegido pasa sin token")

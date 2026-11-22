@@ -143,10 +143,33 @@
             <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
         </dependency>
 
-        <!-- Kafka: topic de acciones de la catedra y topic de telefono (#18, #19). -->
+        <!--
+          Kafka: topic de acciones de la catedra y topic de telefono (#18, #19).
+
+          Va el STARTER y no spring-kafka suelto: en Spring Boot 4 las
+          autoconfiguraciones viven en modulos propios (mismo caso que Flyway,
+          ver el starter de flyway mas arriba), asi que spring-kafka solo
+          pondria la libreria en el classpath sin registrar el procesamiento
+          de @KafkaListener ni los beans por defecto — el consumidor
+          compilaria pero no arrancaria nunca, sin avisar.
+        -->
         <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka</artifactId>
+        </dependency>
+
+        <!--
+          Observabilidad (#40): va el STARTER solo por el MeterRegistry de
+          Micrometer que autoconfigura (los contadores de reintentos,
+          duplicados descartados, vencidos cerrados y fallos de integracion),
+          no por los endpoints de Actuator. management.endpoints.enabled-by-default=false
+          en application.properties los apaga a todos: /api/health del slice
+          health sigue siendo el unico endpoint de salud, nada de superficie
+          nueva sin asegurar con el ruleset de SecurityConfig.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
         <!-- Documentacion de la API: Swagger UI. -->
@@ -179,6 +202,49 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+          Broker embebido para las pruebas de integracion del consumidor y el
+          productor Kafka (#21): levanta un broker real en el mismo proceso de
+          la JVM, sin Docker, asi que corre en CI igual que cualquier otra
+          prueba de `./mvnw verify`. Alcanza con esto y no con Testcontainers
+          porque no hace falta reproducir la configuracion de un broker real,
+          solo que exista uno de verdad para probar la configuracion de
+          Spring Kafka (#18, #19) contra algo que no sea un mock.
+        -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+          Testcontainers (#41): la unica suite que corre contra PostgreSQL y
+          Kafka reales, no contra dobles. spring-boot-starter-parent ya
+          importa el testcontainers-bom (ver spring-boot-dependencies), asi
+          que estos artefactos no fijan version propia. spring-boot-testcontainers
+          aporta @ServiceConnection, que autoconfigura spring.datasource.* a
+          partir del contenedor de Postgres sin que esta suite tenga que
+          declarar la URL a mano.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-kafka</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -251,5 +317,37 @@
             </plugin>
         </plugins>
     </build>
+
+    <!--
+      Perfil e2e (#41): la suite de Testcontainers vive en clases *IT.java,
+      que Surefire ignora por convencion (su include pattern por defecto es
+      *Test.java/*Tests.java/*TestCase.java). El plugin de Failsafe para
+      correrlas solo entra con este perfil: `./mvnw verify` sin -Pe2e sigue
+      sin necesitar Docker, y `./mvnw verify -Pe2e` (o, reusando el target/ ya
+      compilado, `./mvnw -Pe2e failsafe:integration-test failsafe:verify`,
+      que es lo que usa el workflow de CI) levanta PostgreSQL y Kafka reales
+      con Testcontainers.
+    -->
+    <profiles>
+        <profile>
+            <id>e2e</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>integration-test</goal>
+                                    <goal>verify</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

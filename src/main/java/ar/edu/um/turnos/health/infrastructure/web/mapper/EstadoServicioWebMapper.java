@@ -2,7 +2,10 @@ package ar.edu.um.turnos.health.infrastructure.web.mapper;
 
 import org.springframework.stereotype.Component;
 
+import ar.edu.um.turnos.health.domain.model.EstadoDependencia;
+import ar.edu.um.turnos.health.domain.model.EstadoDependencias;
 import ar.edu.um.turnos.health.domain.model.EstadoServicio;
+import ar.edu.um.turnos.health.infrastructure.web.dto.EstadoDependenciasResponse;
 import ar.edu.um.turnos.health.infrastructure.web.dto.EstadoServicioResponse;
 
 /**
@@ -23,7 +26,22 @@ public class EstadoServicioWebMapper {
                 estadoServicio.getNombre(),
                 estadoServicio.getVersion(),
                 estadoServicio.getEstado() == null ? null : estadoServicio.getEstado().name(),
-                estadoServicio.getConsultadoEn());
+                estadoServicio.getConsultadoEn(),
+                toResponse(estadoServicio.getDependencias()));
+    }
+
+    private EstadoDependenciasResponse toResponse(EstadoDependencias dependencias) {
+        if (dependencias == null) {
+            return null;
+        }
+        return new EstadoDependenciasResponse(
+                nombreDe(dependencias.getBaseDeDatos()),
+                nombreDe(dependencias.getCatedra()),
+                nombreDe(dependencias.getCatalogo()));
+    }
+
+    private String nombreDe(EstadoDependencia estado) {
+        return estado == null ? null : estado.name();
     }
 
 }

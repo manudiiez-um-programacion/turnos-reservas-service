@@ -2,9 +2,11 @@ package ar.edu.um.turnos.config;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -65,13 +67,35 @@ public record CatedraProperties(
 ) {
 
     /**
-     * Acceso REST al servicio central.
+     * Acceso REST al servicio central (#14).
      *
-     * @param baseUrl URL base de la API, sin barra final
+     * <p>Los timeouts y los reintentos tienen default y no son obligatorios:
+     * son parametros de ajuste operativo, no datos que entregue la catedra.
+     * Los reintentos del cliente solo se aplican a las operaciones idempotentes
+     * (GET); las que tienen efectos (holds, confirmar, cancelar) nunca se
+     * reintentan a ciegas, se reconcilian (#36).
+     *
+     * @param baseUrl         URL base de la API, sin barra final
+     * @param connectTimeout  timeout de conexion del cliente REST
+     * @param readTimeout     timeout de lectura del cliente REST
+     * @param maxRetries      cantidad maxima de reintentos en operaciones GET
+     * @param retryBackoff    espera base entre reintentos (crece exponencialmente)
      */
     public record Api(
             @NotBlank(message = "falta CATEDRA_API_BASE_URL: la informa la catedra por otro canal")
-            String baseUrl
+            String baseUrl,
+
+            @NotNull(message = "falta CATEDRA_API_CONNECT_TIMEOUT")
+            Duration connectTimeout,
+
+            @NotNull(message = "falta CATEDRA_API_READ_TIMEOUT")
+            Duration readTimeout,
+
+            @Min(value = 0, message = "CATEDRA_API_MAX_RETRIES no puede ser negativo")
+            int maxRetries,
+
+            @NotNull(message = "falta CATEDRA_API_RETRY_BACKOFF")
+            Duration retryBackoff
     ) {
     }
 

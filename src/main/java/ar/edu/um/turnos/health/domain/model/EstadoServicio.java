@@ -25,9 +25,19 @@ public class EstadoServicio {
     private String version;
     private Estado estado;
     private Instant consultadoEn;
+    private EstadoDependencias dependencias;
 
+    /**
+     * {@code DEGRADADO} es lo que agrega #40: la base de datos esta disponible
+     * (el servicio puede atender las operaciones que dependen solo de datos
+     * propios, §3) pero la catedra o el catalogo no, asi que las operaciones
+     * que necesitan validar informacion vigente no pueden iniciarse. Distinto
+     * de {@code DOWN}, que es exclusivo de la base caida: sin ella el
+     * servicio no puede operar en absoluto.
+     */
     public enum Estado {
         UP,
+        DEGRADADO,
         DOWN
     }
 

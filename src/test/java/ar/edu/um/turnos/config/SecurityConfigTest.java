@@ -6,12 +6,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import static org.mockito.Mockito.when;
+
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
 import javax.crypto.SecretKey;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -21,7 +24,12 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import ar.edu.um.turnos.health.domain.model.EstadoDependencia;
+import ar.edu.um.turnos.health.domain.model.EstadoDependencias;
+import ar.edu.um.turnos.health.domain.ports.out.EstadoDependenciasPort;
 
 /**
  * Recorre la cadena de seguridad real (#11): solo registro, login y la
@@ -45,6 +53,23 @@ class SecurityConfigTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    // #40: el adaptador real de EstadoDependenciasPort abre una conexion JDBC
+    // de verdad, y el perfil 'test' no tiene una base levantada. Esta clase
+    // prueba seguridad y CORS, no el estado de salud, asi que mockearlo con
+    // todo disponible es lo que mantiene /api/health en 200 sin acoplar estas
+    // pruebas a los detalles de #40 (igual que HealthControllerTest).
+    @MockitoBean
+    private EstadoDependenciasPort estadoDependenciasPort;
+
+    @BeforeEach
+    void estadoDependenciasDisponible() {
+        when(estadoDependenciasPort.consultar()).thenReturn(EstadoDependencias.builder()
+                .baseDeDatos(EstadoDependencia.DISPONIBLE)
+                .catedra(EstadoDependencia.DESCONOCIDO)
+                .catalogo(EstadoDependencia.DESCONOCIDO)
+                .build());
+    }
 
     private static String token(String secreto, String issuer, Instant expiracion) {
         SecretKey clave = Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8));

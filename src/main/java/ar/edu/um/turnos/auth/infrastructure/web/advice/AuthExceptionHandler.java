@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import ar.edu.um.turnos.auth.application.exception.CredencialesInvalidasException;
 import ar.edu.um.turnos.auth.application.exception.UsuarioDuplicadoException;
+import ar.edu.um.turnos.auth.application.exception.UsuarioNoEncontradoException;
 
 /**
  * Traduce las excepciones del slice {@code auth} a
@@ -31,6 +32,14 @@ public class AuthExceptionHandler {
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
         problema.setTitle("Credenciales invalidas");
         problema.setProperty("code", "CREDENCIALES_INVALIDAS");
+        return problema;
+    }
+
+    @ExceptionHandler(UsuarioNoEncontradoException.class)
+    public ProblemDetail manejarUsuarioNoEncontrado(UsuarioNoEncontradoException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+        problema.setTitle("Usuario no encontrado");
+        problema.setProperty("code", "USUARIO_NO_ENCONTRADO");
         return problema;
     }
 
