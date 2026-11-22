@@ -72,6 +72,9 @@ idempotencia por `eventId`, la máquina de estados del proceso de reserva, la
 reconciliación ante timeouts/reinicios/vencimientos y las decisiones de
 seguridad (con sus límites conocidos) están en
 [`docs/idempotencia-recuperacion-seguridad.md`](docs/idempotencia-recuperacion-seguridad.md).
+Las decisiones de diseño que le corresponden al alumno, con su contexto,
+las opciones consideradas y las consecuencias de cada una, están
+registradas como ADR en [`docs/adr/`](docs/adr/).
 
 ## Levantar el entorno local
 
